@@ -44,9 +44,13 @@ export default function AdminView({
   theme,
   setTheme,
   chef,
-  checklists
+  checklists,
+  activeAdminTab: externalActiveAdminTab,
+  setActiveAdminTab: externalSetActiveAdminTab
 }) {
-  const [activeAdminTab, setActiveAdminTab] = useState('sales'); // 'sales', 'orders', 'pnl', 'bank-rec', 'payroll', 'inventory', 'loyalty', 'aggregators', 'branches', 'accounting', 'menu', 'branding'
+  const [internalActiveAdminTab, setInternalActiveAdminTab] = useState('sales');
+  const activeAdminTab = externalActiveAdminTab !== undefined ? externalActiveAdminTab : internalActiveAdminTab;
+  const setActiveAdminTab = externalSetActiveAdminTab || setInternalActiveAdminTab;
   const [orderSearch, setOrderSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [payrollDisbursed, setPayrollDisbursed] = useState(false);
@@ -288,22 +292,24 @@ export default function AdminView({
       {/* Admin Tabs */}
       <div className="filter-tabs-container" style={{ padding: '0 0 12px' }}>
         {[
-          { id: 'sales', label: 'Sales Dashboard' },
-          { id: 'orders', label: 'Orders & CSV' },
-          { id: 'pnl', label: 'P&L & Cash Check' },
-          { id: 'bank-rec', label: 'Bank CSV Rec' },
-          { id: 'payroll', label: 'Staff Payroll' },
-          { id: 'inventory', label: 'Inventory & Wastage' },
-          { id: 'loyalty', label: 'Loyalty Club' },
-          { id: 'aggregators', label: 'Zomato & Swiggy' },
-          { id: 'branches', label: 'Multi-Branch' },
-          { id: 'accounting', label: 'Tally / Zoho' },
-          { id: 'menu', label: 'Menu CRUD' },
-          { id: 'branding', label: 'App Customizer' }
+          { id: 'sales', label: 'Sales Dashboard', inFooter: true },
+          { id: 'orders', label: 'Orders & CSV', inFooter: true },
+          { id: 'pnl', label: 'P&L & Cash Check', inFooter: true },
+          { id: 'bank-rec', label: 'Bank CSV Rec', inFooter: false },
+          { id: 'payroll', label: 'Staff Payroll', inFooter: true },
+          { id: 'inventory', label: 'Inventory & Wastage', inFooter: false },
+          { id: 'loyalty', label: 'Loyalty Club', inFooter: false },
+          { id: 'aggregators', label: 'Zomato & Swiggy', inFooter: false },
+          { id: 'branches', label: 'Multi-Branch', inFooter: false },
+          { id: 'accounting', label: 'Tally / Zoho', inFooter: false },
+          { id: 'menu', label: 'Menu CRUD', inFooter: false },
+          { id: 'branding', label: 'App Customizer', inFooter: true }
         ].map((tab) => (
           <button
             key={tab.id}
-            className={`capsule-tab ${activeAdminTab === tab.id ? 'active' : ''}`}
+            className={`capsule-tab ${activeAdminTab === tab.id ? 'active' : ''} ${
+              tab.inFooter ? 'admin-footer-tab-mobile-hidden' : ''
+            }`}
             onClick={() => {
               playTapSound();
               setActiveAdminTab(tab.id);

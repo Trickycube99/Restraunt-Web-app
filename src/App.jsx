@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
+import AuthModal from './components/AuthModal';
 import CustomerView from './views/CustomerView';
 import AboutChefView from './views/AboutChefView';
 import CounterView from './views/CounterView';
@@ -16,6 +17,14 @@ import {
   initialTheme
 } from './data/initialData';
 import { loadData, saveData, resetAllDataToDefault, STORAGE_KEYS } from './utils/storage';
+import {
+  ROLES,
+  getStoredSessions,
+  isAuthenticated,
+  getSession,
+  logoutRole,
+  resetAllSessions
+} from './utils/auth';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import confetti from 'canvas-confetti';
 
@@ -30,6 +39,10 @@ export default function App() {
   const [theme, setTheme] = useState(() => loadData(STORAGE_KEYS.THEME, initialTheme));
   const [checklists, setChecklists] = useState(() => loadData(STORAGE_KEYS.CHECKLISTS, []));
 
+  // Authentication Abstraction State (Persisted across sessions)
+  const [authSessions, setAuthSessions] = useState(() => getStoredSessions());
+  const [authModal, setAuthModal] = useState({ isOpen: false, targetRole: null });
+
   // Cart State (Customer specific)
   const [cart, setCart] = useState([]);
   const [activeTable, setActiveTable] = useState('Table 04');
@@ -38,6 +51,7 @@ export default function App() {
   const [currentRole, setCurrentRole] = useState('customer'); // 'customer' | 'chef' | 'counter' | 'kds' | 'admin'
   const [activeTab, setActiveTab] = useState('menu'); // customer: 'menu','chef','cart','track' | counter: 'orders','manual','stock','checklist'
   const [counterSubTab, setCounterSubTab] = useState('orders');
+  const [adminTab, setAdminTab] = useState('sales'); // owner admin active tab ('sales','orders','pnl','payroll','branding' in footer on mobile)
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,7 +66,7 @@ export default function App() {
   useEffect(() => { saveData(STORAGE_KEYS.THEME, theme); }, [theme]);
   useEffect(() => { saveData(STORAGE_KEYS.CHECKLISTS, checklists); }, [checklists]);
 
-  // URL Hash & Parameter Support for QR Dine-in & Direct Role Linking
+  // URL Hash & Parameter Support with Authentication Guard
   useEffect(() => {
     const syncFromUrl = () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -67,22 +81,24 @@ export default function App() {
       }
 
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      if (hash === 'chef') {
-        setCurrentRole('chef');
-        setActiveTab('chef');
-      } else if (hash === 'counter' || hash === 'pos') {
-        setCurrentRole('counter');
-        setActiveTab('orders');
-        setCounterSubTab('orders');
-      } else if (hash === 'kds' || hash === 'kitchen') {
-        setCurrentRole('kds');
-        setActiveTab('kds');
-      } else if (hash === 'admin' || hash === 'owner') {
-        setCurrentRole('admin');
-        setActiveTab('sales');
-      } else if (hash === 'customer' || hash === 'menu') {
-        setCurrentRole('customer');
-        setActiveTab('menu');
+      let targetRole = null;
+      if (hash === 'chef') targetRole = 'chef';
+      else if (hash === 'counter' || hash === 'pos') targetRole = 'counter';
+      else if (hash === 'kds' || hash === 'kitchen') targetRole = 'kds';
+      else if (hash === 'admin' || hash === 'owner') targetRole = 'admin';
+      else if (hash === 'customer' || hash === 'menu') targetRole = 'customer';
+
+      if (targetRole) {
+        if (isAuthenticated(targetRole)) {
+          setCurrentRole(targetRole);
+          if (targetRole === 'customer') setActiveTab('menu');
+          else if (targetRole === 'chef') setActiveTab('chef');
+          else if (targetRole === 'counter') { setActiveTab('orders'); setCounterSubTab('orders'); }
+          else if (targetRole === 'kds') setActiveTab('kds');
+        } else {
+          // Trigger interface authentication modal
+          setAuthModal({ isOpen: true, targetRole });
+        }
       }
     };
 
@@ -111,8 +127,10 @@ export default function App() {
   // Reset demo state helper
   const handleResetDemo = () => {
     playTapSound();
-    if (window.confirm('Reset all demo data (menu, orders, expenses, staff) to fresh defaults?')) {
+    if (window.confirm('Reset all demo data (menu, orders, expenses, staff & sessions) to fresh defaults?')) {
       resetAllDataToDefault();
+      resetAllSessions();
+      setAuthSessions(getStoredSessions());
       setMenu(initialMenu);
       setChef(verifiedChefData);
       setOrders(initialOrders);
@@ -125,9 +143,14 @@ export default function App() {
     }
   };
 
-  // Switch role helper
+  // Switch role helper with Authentication Verification
   const handleRoleSwitch = (role) => {
     playTapSound();
+    if (!isAuthenticated(role)) {
+      setAuthModal({ isOpen: true, targetRole: role });
+      return;
+    }
+
     setCurrentRole(role);
     window.location.hash = role;
     if (role === 'customer') {
@@ -139,8 +162,44 @@ export default function App() {
       setCounterSubTab('orders');
     } else if (role === 'kds') {
       setActiveTab('kds');
-    } else if (role === 'admin') {
-      setActiveTab('sales');
+    }
+  };
+
+  // Auth Success Handler
+  const handleAuthSuccess = (newSession) => {
+    const updated = getStoredSessions();
+    setAuthSessions(updated);
+    setAuthModal({ isOpen: false, targetRole: null });
+
+    const role = newSession.role;
+    setCurrentRole(role);
+    window.location.hash = role;
+
+    if (role === 'customer') {
+      if (newSession.table) setActiveTable(newSession.table);
+      setActiveTab('menu');
+    } else if (role === 'chef') {
+      setActiveTab('chef');
+    } else if (role === 'counter') {
+      setActiveTab('orders');
+      setCounterSubTab('orders');
+    } else if (role === 'kds') {
+      setActiveTab('kds');
+    }
+  };
+
+  // Logout Role Handler
+  const handleLogoutRole = (roleToLogout) => {
+    playTapSound();
+    logoutRole(roleToLogout);
+    const updated = getStoredSessions();
+    setAuthSessions(updated);
+
+    if (currentRole === roleToLogout) {
+      // Return safely to customer QR view
+      setCurrentRole('customer');
+      window.location.hash = 'customer';
+      setActiveTab('menu');
     }
   };
 
@@ -170,6 +229,9 @@ export default function App() {
           setActiveTab('cart');
         }}
         onResetDemo={handleResetDemo}
+        authSessions={authSessions}
+        onOpenAuth={(role) => setAuthModal({ isOpen: true, targetRole: role })}
+        onLogoutRole={handleLogoutRole}
       />
 
       {/* Main Full-Viewport Content Area */}
@@ -244,6 +306,8 @@ export default function App() {
               setTheme={setTheme}
               chef={chef}
               checklists={checklists}
+              activeAdminTab={adminTab}
+              setActiveAdminTab={setAdminTab}
             />
           )}
         </div>
@@ -251,15 +315,17 @@ export default function App() {
 
       {/* Mobile-Only Bottom Navigation Dock (Hidden on Laptops / Desktops >= 769px) */}
       <BottomNav
-        currentRole={currentRole === 'chef' ? 'customer' : currentRole}
+        currentRole={currentRole}
         activeTab={
-          currentRole === 'chef'
+          currentRole === 'customer'
+            ? activeTab
+            : currentRole === 'chef'
             ? 'chef'
             : currentRole === 'counter'
             ? counterSubTab
             : currentRole === 'kds'
             ? 'kds'
-            : activeTab
+            : adminTab
         }
         setActiveTab={(tabId) => {
           if (currentRole === 'customer') {
@@ -279,10 +345,21 @@ export default function App() {
             if (tabId === 'counter') {
               handleRoleSwitch('counter');
             }
+          } else if (currentRole === 'admin') {
+            setAdminTab(tabId);
           }
         }}
         cartCount={cartCount}
         activeOrdersCount={activeOrdersCount}
+      />
+
+      {/* Interface Specific Authentication Modal */}
+      <AuthModal
+        isOpen={authModal.isOpen}
+        targetRole={authModal.targetRole}
+        onSuccess={handleAuthSuccess}
+        onClose={() => setAuthModal({ isOpen: false, targetRole: null })}
+        theme={theme}
       />
     </div>
   );

@@ -11,7 +11,12 @@ import {
   ShoppingBag,
   MapPin,
   CheckCircle2,
-  Utensils
+  Utensils,
+  Lock,
+  Unlock,
+  User,
+  LogOut,
+  KeyRound
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
 
@@ -31,17 +36,23 @@ export default function Header({
   cartCount,
   cartTotal,
   onOpenCart,
-  onResetDemo
+  onResetDemo,
+  authSessions = {},
+  onOpenAuth,
+  onLogoutRole
 }) {
   const [activeBranch, setActiveBranch] = useState('Connaught Place, New Delhi');
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
+  const [showAuthMenu, setShowAuthMenu] = useState(false);
 
   const branches = [
     'Connaught Place, New Delhi (Flagship)',
     'DLF Cyber Hub, Gurugram',
     '12th Main Indiranagar, Bengaluru'
   ];
+
+  const currentSession = authSessions[currentRole];
 
   return (
     <>
@@ -117,6 +128,7 @@ export default function Header({
           >
             <QrCode size={14} />
             <span>QR Menu</span>
+            {!authSessions['customer'] && <Lock size={10} className="role-lock-badge" />}
             {currentRole === 'customer' && (
               <span
                 className="table-tag-pill"
@@ -140,6 +152,7 @@ export default function Header({
           >
             <ShieldCheck size={14} color={currentRole === 'chef' ? '#FFFFFF' : '#007AFF'} />
             <span>About Chef</span>
+            {!authSessions['chef'] && <Lock size={10} className="role-lock-badge" />}
           </button>
 
           <button
@@ -148,6 +161,7 @@ export default function Header({
           >
             <Layers size={14} />
             <span>Live POS</span>
+            {!authSessions['counter'] && <Lock size={10} className="role-lock-badge" />}
             {activeOrdersCount > 0 && (
               <span className="nav-badge-pill">{activeOrdersCount}</span>
             )}
@@ -159,6 +173,7 @@ export default function Header({
           >
             <Monitor size={14} color={currentRole === 'kds' ? '#FFFFFF' : '#38BDF8'} />
             <span>Kitchen KDS</span>
+            {!authSessions['kds'] && <Lock size={10} className="role-lock-badge" />}
             {activeOrdersCount > 0 && (
               <span className="nav-badge-pill kds">{activeOrdersCount}</span>
             )}
@@ -170,11 +185,79 @@ export default function Header({
           >
             <BarChart3 size={14} />
             <span>Owner Admin</span>
+            {!authSessions['admin'] && <Lock size={10} className="role-lock-badge" />}
           </button>
         </nav>
 
         {/* Right Section: Search, Cart Summary & Utilities */}
         <div className="header-right">
+          {/* Active Interface Auth Profile Pill */}
+          <div style={{ position: 'relative' }}>
+            <button
+              className={`header-auth-profile-pill ${!currentSession ? 'unauthenticated' : ''}`}
+              onClick={() => {
+                playTapSound();
+                setShowAuthMenu(!showAuthMenu);
+              }}
+              title="Active interface session & role credentials"
+            >
+              {currentSession ? (
+                <>
+                  <User size={13} color="#007AFF" />
+                  <span>{currentSession.name.split(' ')[0]}</span>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
+                </>
+              ) : (
+                <>
+                  <Lock size={12} color="#D97706" />
+                  <span>Locked</span>
+                </>
+              )}
+              <ChevronDown size={11} />
+            </button>
+
+            {showAuthMenu && (
+              <div className="header-auth-menu">
+                <div className="header-auth-menu-header">
+                  <div className="header-auth-menu-name">
+                    {currentSession ? currentSession.name : `${currentRole.toUpperCase()} (Not Authenticated)`}
+                  </div>
+                  <div className="header-auth-menu-detail">
+                    {currentSession
+                      ? (currentSession.table || currentSession.terminal || currentSession.station || currentSession.email || currentSession.fssaiLicense)
+                      : 'Requires role authentication'}
+                  </div>
+                </div>
+
+                <div
+                  className="header-auth-menu-item"
+                  onClick={() => {
+                    playTapSound();
+                    setShowAuthMenu(false);
+                    if (onOpenAuth) onOpenAuth(currentRole);
+                  }}
+                >
+                  <KeyRound size={14} color="#007AFF" />
+                  <span>{currentSession ? 'Switch User / Re-login' : 'Authenticate Role'}</span>
+                </div>
+
+                {currentSession && (
+                  <div
+                    className="header-auth-menu-item danger"
+                    onClick={() => {
+                      playTapSound();
+                      setShowAuthMenu(false);
+                      if (onLogoutRole) onLogoutRole(currentRole);
+                    }}
+                  >
+                    <LogOut size={14} color="#DC2626" />
+                    <span>Lock / Sign Out</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Mobile Role Switcher Trigger */}
           <div className="mobile-role-selector">
             <button
@@ -208,6 +291,7 @@ export default function Header({
                   >
                     <item.icon size={14} />
                     <span>{item.label}</span>
+                    {!authSessions[item.id] && <Lock size={10} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
                   </div>
                 ))}
               </div>

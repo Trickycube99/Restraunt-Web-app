@@ -24,7 +24,7 @@ export default function BottomNav({
   activeOrdersCount
 }) {
   const getTabs = () => {
-    if (currentRole === 'customer') {
+    if (currentRole === 'customer' || currentRole === 'chef') {
       return [
         { id: 'menu', label: 'Menu', icon: Utensils },
         { id: 'chef', label: 'About Chef', icon: ShieldCheck, hasDot: true },
@@ -44,13 +44,13 @@ export default function BottomNav({
         { id: 'counter', label: 'Live Counter', icon: SlidersHorizontal }
       ];
     } else {
-      // admin
+      // Owner Admin: Dedicated 5 mobile footer options requested by user
       return [
-        { id: 'dashboard', label: 'Sales', icon: BarChart3 },
-        { id: 'history', label: 'Orders & CSV', icon: Receipt },
-        { id: 'finance', label: 'P&L & Cash', icon: DollarSign },
+        { id: 'sales', label: 'Sales', icon: BarChart3 },
+        { id: 'orders', label: 'Order & CSV', icon: Receipt },
+        { id: 'pnl', label: 'P&L Cash', icon: DollarSign },
         { id: 'payroll', label: 'Payroll', icon: Users },
-        { id: 'settings', label: 'Branding', icon: Palette }
+        { id: 'branding', label: 'Branding', icon: Palette }
       ];
     }
   };
