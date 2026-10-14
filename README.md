@@ -71,6 +71,25 @@ Visit `http://localhost:5173` in your browser.
 npm run build
 ```
 
+### ☁️ Deploying to Vercel
+
+The repository includes a production-ready `vercel.json` configured for Vite SPA routing and asset caching.
+
+#### Method 1: 1-Click via Vercel Dashboard (Recommended)
+1. Navigate to [vercel.com/new](https://vercel.com/new).
+2. Import your GitHub repository: `Trickycube99/Restraunt-Web-app`.
+3. Vercel automatically selects the **Vite** framework preset with `npm run build` and output directory `dist`.
+4. Click **Deploy** — your restaurant web app will be live with full HTTPS and worldwide CDN edge routing in under 60 seconds!
+
+#### Method 2: Via Vercel CLI
+```bash
+# Install Vercel CLI
+npm i -g vercel
+
+# Deploy directly
+vercel
+```
+
 ---
 
 ## 📂 Project Structure
