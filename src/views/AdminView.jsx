@@ -23,7 +23,8 @@ import {
   Boxes,
   Crown,
   FileCode,
-  Send
+  Send,
+  QrCode
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import BankReconciliationView from './BankReconciliationView';
@@ -46,7 +47,8 @@ export default function AdminView({
   chef,
   checklists,
   activeAdminTab: externalActiveAdminTab,
-  setActiveAdminTab: externalSetActiveAdminTab
+  setActiveAdminTab: externalSetActiveAdminTab,
+  onOpenTableQr
 }) {
   const [internalActiveAdminTab, setInternalActiveAdminTab] = useState('sales');
   const activeAdminTab = externalActiveAdminTab !== undefined ? externalActiveAdminTab : internalActiveAdminTab;
@@ -323,6 +325,60 @@ export default function AdminView({
       {/* 1. SALES DASHBOARD (FR-A1) */}
       {activeAdminTab === 'sales' && (
         <div>
+          {/* Quick Zero-Auth Table QR Tent Card Generator Banner */}
+          <div
+            className="ios-card active-gradient"
+            style={{
+              padding: '12px 14px',
+              marginBottom: 14,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              cursor: 'pointer',
+              border: '1.5px solid rgba(0, 122, 255, 0.25)'
+            }}
+            onClick={() => {
+              playTapSound();
+              if (onOpenTableQr) onOpenTableQr();
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 12,
+                  background: '#FFFFFF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 6px rgba(0, 122, 255, 0.15)'
+                }}
+              >
+                <QrCode size={20} color="#007AFF" />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Table QR Tent Cards & Standees
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Contactless QR ordering with zero login barrier for guests
+                </div>
+              </div>
+            </div>
+            <button
+              className="btn-primary-pill"
+              style={{ padding: '6px 14px', fontSize: 12 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                playTapSound();
+                if (onOpenTableQr) onOpenTableQr();
+              }}
+            >
+              <span>View QRs</span>
+            </button>
+          </div>
+
           {/* Top 3 KPI Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
             <div className="ios-card active-gradient" style={{ padding: '12px 10px' }}>

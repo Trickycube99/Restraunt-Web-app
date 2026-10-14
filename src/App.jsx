@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BottomNav from './components/BottomNav';
 import AuthModal from './components/AuthModal';
+import TableQrModal from './components/TableQrModal';
 import CustomerView from './views/CustomerView';
 import AboutChefView from './views/AboutChefView';
 import CounterView from './views/CounterView';
@@ -42,6 +43,7 @@ export default function App() {
   // Authentication Abstraction State (Persisted across sessions)
   const [authSessions, setAuthSessions] = useState(() => getStoredSessions());
   const [authModal, setAuthModal] = useState({ isOpen: false, targetRole: null });
+  const [isTableQrOpen, setIsTableQrOpen] = useState(false);
 
   // Cart State (Customer specific)
   const [cart, setCart] = useState([]);
@@ -232,6 +234,7 @@ export default function App() {
         authSessions={authSessions}
         onOpenAuth={(role) => setAuthModal({ isOpen: true, targetRole: role })}
         onLogoutRole={handleLogoutRole}
+        onOpenTableQr={() => setIsTableQrOpen(true)}
       />
 
       {/* Main Full-Viewport Content Area */}
@@ -308,6 +311,7 @@ export default function App() {
               checklists={checklists}
               activeAdminTab={adminTab}
               setActiveAdminTab={setAdminTab}
+              onOpenTableQr={() => setIsTableQrOpen(true)}
             />
           )}
         </div>
@@ -360,6 +364,16 @@ export default function App() {
         onSuccess={handleAuthSuccess}
         onClose={() => setAuthModal({ isOpen: false, targetRole: null })}
         theme={theme}
+      />
+
+      {/* Zero-Auth Direct Table QR Code Generator & Standee Modal */}
+      <TableQrModal
+        isOpen={isTableQrOpen}
+        onClose={() => setIsTableQrOpen(false)}
+        activeTable={activeTable}
+        setActiveTable={setActiveTable}
+        tables={theme.tables}
+        restaurantName={theme.restaurantName}
       />
     </div>
   );

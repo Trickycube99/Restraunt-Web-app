@@ -199,8 +199,10 @@ export function saveStoredSessions(sessions) {
 
 /**
  * Check if a specific role is currently authenticated
+ * Customer (QR Dine-in) is 100% public with zero auth barrier for seamless ordering
  */
 export function isAuthenticated(role) {
+  if (role === ROLES.CUSTOMER) return true;
   const sessions = getStoredSessions();
   return Boolean(sessions && sessions[role] && sessions[role].token);
 }

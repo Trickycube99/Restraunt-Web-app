@@ -39,7 +39,8 @@ export default function Header({
   onResetDemo,
   authSessions = {},
   onOpenAuth,
-  onLogoutRole
+  onLogoutRole,
+  onOpenTableQr
 }) {
   const [activeBranch, setActiveBranch] = useState('Connaught Place, New Delhi');
   const [showBranchMenu, setShowBranchMenu] = useState(false);
@@ -325,6 +326,19 @@ export default function Header({
               <span className="cart-bubble-count">{cartCount}</span>
             </button>
           )}
+
+          {/* Table Standee QR Code Generator Button */}
+          <button
+            className="btn-secondary-pill qr-tent-pill"
+            onClick={() => {
+              playTapSound();
+              if (onOpenTableQr) onOpenTableQr();
+            }}
+            title="Generate & print contactless table QR standee (Zero auth required)"
+          >
+            <QrCode size={13} color="#007AFF" />
+            <span className="qr-pill-label">Table QR</span>
+          </button>
 
           {/* Reset Demo Data Button */}
           <button
