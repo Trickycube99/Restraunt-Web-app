@@ -190,7 +190,7 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
           <Award size={18} color="#D97706" />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="certifications-grid">
           {chef.certifications.map((cert) => (
             <div
               key={cert.id}
@@ -296,7 +296,7 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
           <UtensilsCrossed size={18} color="#007AFF" />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="chef-signatures-grid">
           {signatureItems.map((item) => (
             <div
               key={item.id}

@@ -264,8 +264,8 @@ export default function CustomerView({
         </div>
       )}
 
-      {/* Menu Item Cards Feed */}
-      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Menu Item Cards Feed (Responsive Grid) */}
+      <div className="menu-items-grid">
         {filteredMenu.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
             No culinary items found matching your filters.

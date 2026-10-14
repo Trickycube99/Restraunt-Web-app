@@ -376,8 +376,8 @@ export default function CounterView({
             )}
           </div>
 
-          {/* Orders Feed */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Orders Feed (Responsive Multi-Column POS Grid) */}
+          <div className="orders-grid">
             {filteredOrders.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                 No tickets matching this status.

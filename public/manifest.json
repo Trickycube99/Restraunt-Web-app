@@ -1,0 +1,17 @@
+{
+  "short_name": "Advait Kitchen",
+  "name": "Advait Artisanal Indian Kitchen & Back-Office POS",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#F8FAFC",
+  "theme_color": "#007AFF",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "Progressive Indian QR table ordering, kitchen KDS, live counter and back-office restaurant web app with FSSAI verified chef accreditation."
+}
