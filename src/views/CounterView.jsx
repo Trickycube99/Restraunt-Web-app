@@ -1,0 +1,1078 @@
+import React, { useState } from 'react';
+import {
+  Layers,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Plus,
+  SlidersHorizontal,
+  DollarSign,
+  AlertTriangle,
+  FileText,
+  Volume2,
+  RefreshCw,
+  Search,
+  Check,
+  Percent,
+  Tag,
+  Printer,
+  MessageSquare,
+  Monitor,
+  Flame,
+  Send
+} from 'lucide-react';
+import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
+import PrinterModal from '../components/PrinterModal';
+import WhatsAppAlertModal from '../components/WhatsAppAlertModal';
+
+export default function CounterView({
+  orders,
+  setOrders,
+  menu,
+  setMenu,
+  offers,
+  setOffers,
+  theme,
+  chef,
+  checklists,
+  setChecklists,
+  activeSubTab = 'orders',
+  setActiveSubTab,
+  onSwitchToKds
+}) {
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'received', 'in-progress', 'ready', 'done'
+  const [rejectOrderId, setRejectOrderId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('Item ingredient out of stock');
+
+  // Hardware & Alert Modals State (Phase 2)
+  const [selectedPrintOrder, setSelectedPrintOrder] = useState(null);
+  const [selectedWhatsAppOrder, setSelectedWhatsAppOrder] = useState(null);
+
+  // Manual Walk-in Order Punch Form (FR-P7)
+  const [manualTable, setManualTable] = useState('Table 01');
+  const [manualCustomer, setManualCustomer] = useState('Walk-in Diner');
+  const [manualItems, setManualItems] = useState([]);
+  const [manualPayment, setManualPayment] = useState('Cash Settled');
+
+  // Daily Closing Checklist State (FR-P8 & 5.4)
+  const [actualCash, setActualCash] = useState('');
+  const [actualCard, setActualCard] = useState('');
+  const [actualUpi, setActualUpi] = useState('');
+  const [varianceReason, setVarianceReason] = useState('');
+  const [checklistSubmitted, setChecklistSubmitted] = useState(false);
+
+  // Price Edit State (FR-P4)
+  const [editingItem, setEditingItem] = useState(null);
+  const [newPrice, setNewPrice] = useState('');
+
+  // New Offer State (FR-P5)
+  const [newOfferCode, setNewOfferCode] = useState('');
+  const [newOfferType, setNewOfferType] = useState('percent');
+  const [newOfferValue, setNewOfferValue] = useState('');
+  const [newOfferDesc, setNewOfferDesc] = useState('');
+
+  // Calculate Expected Totals from recorded orders for today
+  const expectedCash = orders
+    .filter((o) => o.paymentMode.toLowerCase().includes('counter') || o.paymentMode.toLowerCase().includes('cash'))
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const expectedCard = orders
+    .filter((o) => o.paymentMode.toLowerCase().includes('card'))
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const expectedUpi = orders
+    .filter((o) => o.paymentMode.toLowerCase().includes('upi'))
+    .reduce((sum, o) => sum + o.total, 0);
+
+  const totalExpected = expectedCash + expectedCard + expectedUpi;
+
+  // Differences for checklist (INR)
+  const diffCash = actualCash !== '' ? Number(actualCash) - expectedCash : 0;
+  const diffCard = actualCard !== '' ? Number(actualCard) - expectedCard : 0;
+  const diffUpi = actualUpi !== '' ? Number(actualUpi) - expectedUpi : 0;
+  const totalVariance = diffCash + diffCard + diffUpi;
+  const hasVarianceAlert = Math.abs(totalVariance) > 200.0; // ₹200 threshold
+
+  // Status Handlers (FR-P2)
+  const handleUpdateStatus = (orderId, newStatus, newLabel, progressPercent) => {
+    playTapSound();
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id === orderId) {
+          return {
+            ...ord,
+            status: newStatus,
+            statusLabel: newLabel,
+            progressPercent: progressPercent
+          };
+        }
+        return ord;
+      })
+    );
+    if (newStatus === 'done') {
+      playSuccessChime();
+    }
+  };
+
+  const handleRejectSubmit = () => {
+    playTapSound();
+    setOrders((prev) =>
+      prev.map((ord) => {
+        if (ord.id === rejectOrderId) {
+          return {
+            ...ord,
+            status: 'rejected',
+            statusLabel: `Rejected: ${rejectReason}`,
+            progressPercent: 0
+          };
+        }
+        return ord;
+      })
+    );
+    setRejectOrderId(null);
+  };
+
+  // Toggle Item Availability (FR-P4)
+  const handleToggleAvailability = (itemId) => {
+    playTapSound();
+    setMenu((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, isAvailable: !item.isAvailable } : item))
+    );
+  };
+
+  // Save Price Edit (FR-P4)
+  const handleSavePrice = () => {
+    playTapSound();
+    const priceNum = parseFloat(newPrice);
+    if (!isNaN(priceNum) && priceNum > 0 && editingItem) {
+      setMenu((prev) =>
+        prev.map((item) => (item.id === editingItem.id ? { ...item, price: priceNum } : item))
+      );
+      setEditingItem(null);
+      playSuccessChime();
+    }
+  };
+
+  // Create Offer (FR-P5)
+  const handleCreateOffer = (e) => {
+    e.preventDefault();
+    playTapSound();
+    if (!newOfferCode || !newOfferValue) return;
+
+    const offerObj = {
+      id: `off-${Date.now()}`,
+      code: newOfferCode.trim().toUpperCase(),
+      type: newOfferType,
+      value: parseFloat(newOfferValue),
+      description: newOfferDesc || `${newOfferValue}% Off Offer`,
+      isActive: true
+    };
+
+    setOffers((prev) => [offerObj, ...prev]);
+    setNewOfferCode('');
+    setNewOfferValue('');
+    setNewOfferDesc('');
+    playSuccessChime();
+  };
+
+  // Manual Punch In Submit (FR-P7)
+  const handleAddManualItem = (item) => {
+    playTapSound();
+    setManualItems((prev) => {
+      const exist = prev.find((i) => i.id === item.id);
+      if (exist) {
+        return prev.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i));
+      }
+      return [...prev, { ...item, quantity: 1, note: '' }];
+    });
+  };
+
+  const handlePunchOrderSubmit = () => {
+    if (manualItems.length === 0) return;
+    playTapSound();
+
+    const subtotal = manualItems.reduce((acc, i) => acc + i.price * i.quantity, 0);
+    const tax = Number((subtotal * 0.05).toFixed(2));
+    const total = Number((subtotal + tax).toFixed(2));
+
+    const newOrder = {
+      id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+      customerName: manualCustomer,
+      table: manualTable,
+      phone: 'Walk-in',
+      createdAt: new Date().toISOString(),
+      status: 'in-progress',
+      statusLabel: 'Punched at Counter',
+      items: manualItems,
+      orderNote: 'Direct POS manual walk-in order',
+      paymentMode: manualPayment,
+      paymentStatus: 'Settled at Counter',
+      subtotal,
+      tax,
+      discount: 0,
+      total,
+      progressPercent: 50
+    };
+
+    setOrders((prev) => [newOrder, ...prev]);
+    setManualItems([]);
+    setActiveSubTab('orders');
+    playSuccessChime();
+  };
+
+  // Submit Daily Closing Checklist (FR-P8 & 5.4)
+  const handleSubmitClosingChecklist = (e) => {
+    e.preventDefault();
+    playTapSound();
+
+    if (hasVarianceAlert && !varianceReason.trim()) {
+      playAlertChime();
+      alert('Variance exceeds ₹200 threshold. Please provide an audit explanation note.');
+      return;
+    }
+
+    const report = {
+      id: `CHK-${Date.now()}`,
+      date: new Date().toLocaleDateString(),
+      timestamp: new Date().toLocaleTimeString(),
+      expected: { cash: expectedCash, card: expectedCard, upi: expectedUpi, total: totalExpected },
+      actual: {
+        cash: Number(actualCash || 0),
+        card: Number(actualCard || 0),
+        upi: Number(actualUpi || 0),
+        total: Number(actualCash || 0) + Number(actualCard || 0) + Number(actualUpi || 0)
+      },
+      variance: totalVariance,
+      varianceReason: varianceReason || 'Balanced settlement within threshold',
+      status: 'Audited & Submitted'
+    };
+
+    setChecklists((prev) => [report, ...prev]);
+    setChecklistSubmitted(true);
+    playSuccessChime();
+  };
+
+  // Filter orders by status tab
+  const filteredOrders = orders.filter((o) => {
+    if (filterStatus === 'all') return true;
+    return o.status === filterStatus;
+  });
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 85 }}>
+      {/* Top Title & Sub-tabs */}
+      <div style={{ marginBottom: 14 }}>
+        <div className="screen-title">Counter Order Queue</div>
+        <div className="screen-subtitle">Live Kitchen Stack, POS Punching & EOD Cash Checklist</div>
+      </div>
+
+      {/* Sub-Nav Tabs (Strict Design System Rules) */}
+      <div className="filter-tabs-container" style={{ padding: '0 0 12px' }}>
+        <button
+          className={`capsule-tab ${activeSubTab === 'orders' ? 'active' : ''}`}
+          onClick={() => {
+            playTapSound();
+            setActiveSubTab('orders');
+          }}
+        >
+          Live Stack ({orders.filter((o) => o.status !== 'done' && o.status !== 'rejected').length})
+        </button>
+
+        <button
+          className={`capsule-tab ${activeSubTab === 'manual' ? 'active' : ''}`}
+          onClick={() => {
+            playTapSound();
+            setActiveSubTab('manual');
+          }}
+        >
+          + Punch Walk-in
+        </button>
+
+        <button
+          className={`capsule-tab ${activeSubTab === 'stock' ? 'active' : ''}`}
+          onClick={() => {
+            playTapSound();
+            setActiveSubTab('stock');
+          }}
+        >
+          Menu & Prices
+        </button>
+
+        <button
+          className={`capsule-tab ${activeSubTab === 'checklist' ? 'active' : ''}`}
+          onClick={() => {
+            playTapSound();
+            setActiveSubTab('checklist');
+          }}
+        >
+          Closing EOD
+        </button>
+      </div>
+
+      {/* VIEW 1: LIVE ORDERS STACK */}
+      {activeSubTab === 'orders' && (
+        <div>
+          {/* Status Quick Filter Bar */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
+            {['all', 'received', 'in-progress', 'ready', 'done'].map((st) => (
+              <button
+                key={st}
+                className="capsule-tab"
+                style={{
+                  fontSize: 12,
+                  padding: '4px 10px',
+                  background: filterStatus === st ? '#111827' : '#F3F4F6',
+                  color: filterStatus === st ? '#FFFFFF' : '#4B5563',
+                  fontWeight: 600
+                }}
+                onClick={() => {
+                  playTapSound();
+                  setFilterStatus(st);
+                }}
+              >
+                {st.toUpperCase()}
+              </button>
+            ))}
+          </div>
+
+          {/* Quick Hardware & Station Status Bar (Phase 2) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#0F172A',
+              color: '#F8FAFC',
+              borderRadius: 14,
+              padding: '10px 14px',
+              marginBottom: 14,
+              boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, background: '#1E293B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Monitor size={16} color="#38BDF8" />
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#38BDF8' }}>
+                  Kitchen Display System (KDS)
+                </div>
+                <div style={{ fontSize: 11, color: '#94A3B8' }}>
+                  {orders.filter((o) => o.status !== 'done' && o.status !== 'rejected').length} Live Kitchen Prep Tickets
+                </div>
+              </div>
+            </div>
+            {onSwitchToKds && (
+              <button
+                className="btn-primary-pill"
+                style={{ padding: '6px 12px', fontSize: 12, background: '#0284C7' }}
+                onClick={() => {
+                  playTapSound();
+                  onSwitchToKds();
+                }}
+              >
+                <span>Launch KDS</span>
+              </button>
+            )}
+          </div>
+
+          {/* Orders Feed */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {filteredOrders.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                No tickets matching this status.
+              </div>
+            ) : (
+              filteredOrders.map((order) => {
+                let gradClass = 'pending-gradient';
+                let pillType = 'pending';
+                let fillType = 'pending';
+
+                if (order.status === 'in-progress' || order.status === 'ready') {
+                  gradClass = 'active-gradient';
+                  pillType = 'progress';
+                  fillType = 'progress';
+                } else if (order.status === 'done') {
+                  gradClass = 'completed-gradient';
+                  pillType = 'done';
+                  fillType = 'done';
+                }
+
+                return (
+                  <div key={order.id} className={`ios-card ${gradClass}`}>
+                    {/* Top Row: Title & Status */}
+                    <div className="card-top-row">
+                      <div className="card-title-group">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="card-heading">{order.id}</span>
+                          <span className="status-pill tag" style={{ fontSize: 10 }}>
+                            {order.table}
+                          </span>
+                        </div>
+                        <span className="card-meta-text">
+                          Diner: {order.customerName} • {order.phone}
+                        </span>
+                      </div>
+
+                      <div style={{ textAlign: 'right' }}>
+                        <span className={`status-pill ${pillType}`} style={{ fontSize: 11 }}>
+                          {order.statusLabel}
+                        </span>
+                        <div className="card-meta-text" style={{ marginTop: 4, fontWeight: 700, color: 'var(--primary-blue)' }}>
+                          ₹{order.total.toFixed(0)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle: Bullet points list of items (Strict HIG Rule) */}
+                    <ul className="body-subtask" style={{ margin: '8px 0 10px' }}>
+                      {order.items.map((item, idx) => (
+                        <li key={idx}>
+                          <strong>{item.quantity}x</strong> {item.name}
+                          {item.note && (
+                            <span style={{ color: '#D97706', fontStyle: 'italic', marginLeft: 6 }}>
+                              [Note: {item.note}]
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Order Note Alert if present */}
+                    {order.orderNote && (
+                      <div
+                        style={{
+                          fontSize: 12,
+                          background: 'rgba(255, 237, 213, 0.7)',
+                          border: '1px solid #FED7AA',
+                          borderRadius: 8,
+                          padding: '6px 10px',
+                          color: '#9A3412',
+                          marginBottom: 10
+                        }}
+                      >
+                        🔔 Kitchen Note: "{order.orderNote}"
+                      </div>
+                    )}
+
+                    {/* Bottom Badges Row */}
+                    <div className="card-badges-row" style={{ marginTop: 0 }}>
+                      <span className="status-pill tag">{order.paymentMode}</span>
+                      <span className="status-pill pending" style={{ fontSize: 10 }}>
+                        {order.paymentStatus}
+                      </span>
+                    </div>
+
+                    {/* Action Buttons Row */}
+                    {order.status !== 'done' && order.status !== 'rejected' && (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(4, 1fr)',
+                          gap: 6,
+                          marginTop: 10
+                        }}
+                      >
+                        <button
+                          className="btn-secondary-pill"
+                          style={{
+                            padding: '7px 4px',
+                            fontSize: 11,
+                            background: order.status === 'in-progress' ? '#E0F2FE' : '#F3F4F6'
+                          }}
+                          onClick={() => handleUpdateStatus(order.id, 'in-progress', 'In Kitchen', 55)}
+                        >
+                          Accept
+                        </button>
+
+                        <button
+                          className="btn-secondary-pill"
+                          style={{
+                            padding: '7px 4px',
+                            fontSize: 11,
+                            background: order.status === 'ready' ? '#FEF08A' : '#F3F4F6'
+                          }}
+                          onClick={() => handleUpdateStatus(order.id, 'ready', 'Ready to Serve', 85)}
+                        >
+                          Ready
+                        </button>
+
+                        <button
+                          className="btn-primary-pill"
+                          style={{ padding: '7px 4px', fontSize: 11, background: '#16A34A' }}
+                          onClick={() => handleUpdateStatus(order.id, 'done', 'Completed', 100)}
+                        >
+                          Done
+                        </button>
+
+                        <button
+                          className="btn-secondary-pill"
+                          style={{ padding: '7px 4px', fontSize: 11, color: '#DC2626' }}
+                          onClick={() => setRejectOrderId(order.id)}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Hardware Print & WhatsApp Alert Triggers (Phase 2) */}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                      <button
+                        className="btn-secondary-pill"
+                        style={{
+                          flex: 1,
+                          padding: '6px 8px',
+                          fontSize: 11,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5
+                        }}
+                        onClick={() => {
+                          playTapSound();
+                          setSelectedPrintOrder(order);
+                        }}
+                        title="Print 80mm/58mm Guest Tax Invoice or Kitchen KOT"
+                      >
+                        <Printer size={12} />
+                        <span>Print Bill / KOT</span>
+                      </button>
+
+                      <button
+                        className="btn-secondary-pill"
+                        style={{
+                          flex: 1,
+                          padding: '6px 8px',
+                          fontSize: 11,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5,
+                          color: '#059669',
+                          borderColor: '#A7F3D0'
+                        }}
+                        onClick={() => {
+                          playTapSound();
+                          setSelectedWhatsAppOrder(order);
+                        }}
+                        title="Dispatch WhatsApp Milestone Notification"
+                      >
+                        <MessageSquare size={12} color="#059669" />
+                        <span>WhatsApp Alert</span>
+                      </button>
+                    </div>
+
+                    {/* Thin Bottom Progress Bar (4px - 6px) */}
+                    <div className="card-bottom-progress">
+                      <div
+                        className={`card-bottom-progress-fill ${fillType}`}
+                        style={{ width: `${order.progressPercent || 30}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 2: MANUAL ORDER ENTRY (FR-P7) */}
+      {activeSubTab === 'manual' && (
+        <div className="ios-card" style={{ marginBottom: 16 }}>
+          <div className="card-top-row">
+            <div className="card-title-group">
+              <span className="card-heading">Punch Walk-in or Phone Order</span>
+              <span className="card-meta-text">Record in-person sales directly to the kitchen stack</span>
+            </div>
+            <Plus size={18} color="#007AFF" />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Table / Counter</label>
+              <select
+                className="ios-select"
+                value={manualTable}
+                onChange={(e) => setManualTable(e.target.value)}
+              >
+                {theme.tables.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Customer Name</label>
+              <input
+                type="text"
+                className="ios-input"
+                value={manualCustomer}
+                onChange={(e) => setManualCustomer(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Payment Settlement</label>
+            <select
+              className="ios-select"
+              value={manualPayment}
+              onChange={(e) => setManualPayment(e.target.value)}
+            >
+              <option value="Cash Settled">Cash Settled</option>
+              <option value="Card Terminal Settled">Card Terminal Settled (Pine Labs)</option>
+              <option value="UPI QR Settled">UPI QR Settled (GPay / PhonePe / Paytm)</option>
+            </select>
+          </div>
+
+          {/* Quick Menu Picker */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
+              Tap Dishes to Add:
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+              {menu.map((dish) => (
+                <button
+                  key={dish.id}
+                  className="btn-secondary-pill"
+                  style={{
+                    padding: '8px 10px',
+                    fontSize: 12,
+                    justifyContent: 'space-between',
+                    textAlign: 'left'
+                  }}
+                  onClick={() => handleAddManualItem(dish)}
+                >
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {dish.name}
+                  </span>
+                  <span style={{ fontWeight: 700, color: 'var(--primary-blue)' }}>₹{dish.price}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Selected Tray */}
+          {manualItems.length > 0 && (
+            <div style={{ background: '#F9FAFB', padding: 12, borderRadius: 14, marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Selected Items:</div>
+              <ul className="body-subtask">
+                {manualItems.map((mi, idx) => (
+                  <li key={idx}>
+                    {mi.quantity}x {mi.name} - ₹{(mi.price * mi.quantity).toFixed(0)}
+                  </li>
+                ))}
+              </ul>
+              <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 6, marginTop: 6, fontWeight: 700, fontSize: 14 }}>
+                Total: ₹
+                {manualItems.reduce((acc, i) => acc + i.price * i.quantity, 0).toFixed(0)}
+              </div>
+            </div>
+          )}
+
+          <button
+            className="btn-primary-pill full-width"
+            onClick={handlePunchOrderSubmit}
+            disabled={manualItems.length === 0}
+          >
+            <CheckCircle2 size={16} />
+            <span>Confirm & Punch Order to Live Stack</span>
+          </button>
+        </div>
+      )}
+
+      {/* VIEW 3: MENU AVAILABILITY & PRICES (FR-P4) */}
+      {activeSubTab === 'stock' && (
+        <div>
+          <div className="ios-card" style={{ marginBottom: 16 }}>
+            <div className="card-top-row">
+              <div className="card-title-group">
+                <span className="card-heading">Menu Stock & Price Control</span>
+                <span className="card-meta-text">Toggle sold-out items instantly & adjust table prices</span>
+              </div>
+              <SlidersHorizontal size={18} color="#007AFF" />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {menu.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    background: '#F9FAFB',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 14
+                  }}
+                >
+                  <div style={{ flex: 1, paddingRight: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{item.name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--primary-blue)', fontWeight: 600 }}>
+                      ₹{item.price.toFixed(0)}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      className="btn-secondary-pill"
+                      style={{ padding: '6px 10px', fontSize: 11 }}
+                      onClick={() => {
+                        setEditingItem(item);
+                        setNewPrice(item.price.toString());
+                      }}
+                    >
+                      Edit ₹
+                    </button>
+
+                    <button
+                      className="btn-secondary-pill"
+                      style={{
+                        padding: '6px 10px',
+                        fontSize: 11,
+                        background: item.isAvailable ? '#DCFCE7' : '#FEE2E2',
+                        color: item.isAvailable ? '#16A34A' : '#DC2626'
+                      }}
+                      onClick={() => handleToggleAvailability(item.id)}
+                    >
+                      {item.isAvailable ? 'In Stock' : 'Sold Out'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Discounts & Offers Creator (FR-P5) */}
+          <div className="ios-card" style={{ marginBottom: 16 }}>
+            <div className="card-top-row">
+              <div className="card-title-group">
+                <span className="card-heading">Create Promo Discounts & Offers</span>
+                <span className="card-meta-text">Manage customer coupon codes & time-limited deals</span>
+              </div>
+              <Percent size={18} color="#9333EA" />
+            </div>
+
+            <form onSubmit={handleCreateOffer}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Coupon Code</label>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    placeholder="e.g. ADVAIT20"
+                    value={newOfferCode}
+                    onChange={(e) => setNewOfferCode(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Discount Type</label>
+                  <select
+                    className="ios-select"
+                    value={newOfferType}
+                    onChange={(e) => setNewOfferType(e.target.value)}
+                  >
+                    <option value="percent">Percentage (%)</option>
+                    <option value="flat">Flat Amount (₹)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Value</label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="ios-input"
+                    placeholder="e.g. 50"
+                    value={newOfferValue}
+                    onChange={(e) => setNewOfferValue(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Description</label>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    placeholder="e.g. ₹50 Off on Dinner Menu"
+                    value={newOfferDesc}
+                    onChange={(e) => setNewOfferDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn-primary-pill full-width">
+                <Tag size={15} />
+                <span>Publish New Offer</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 4: DAILY CLOSING CHECKLIST (FR-P8 & 5.4) */}
+      {activeSubTab === 'checklist' && (
+        <div>
+          <div className="ios-card" style={{ marginBottom: 16 }}>
+            <div className="card-top-row">
+              <div className="card-title-group">
+                <span className="card-heading">End of Day Cash & Sales Checklist</span>
+                <span className="card-meta-text">Verify recorded register sales against physical money</span>
+              </div>
+              <DollarSign size={20} color="#16A34A" />
+            </div>
+
+            {/* System Expected Totals Table */}
+            <div
+              style={{
+                background: '#F9FAFB',
+                border: '1px solid #E5E7EB',
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 16
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                System Recorded Orders (Expected Totals):
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span>Expected Counter Cash:</span>
+                <strong>₹{expectedCash.toFixed(0)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span>Expected Card POS Swipe:</span>
+                <strong>₹{expectedCard.toFixed(0)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span>Expected UPI Settlements:</span>
+                <strong>₹{expectedUpi.toFixed(0)}</strong>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  borderTop: '1px solid #E5E7EB',
+                  paddingTop: 6,
+                  marginTop: 6
+                }}
+              >
+                <span>Total Expected:</span>
+                <span style={{ color: 'var(--primary-blue)' }}>₹{totalExpected.toFixed(0)}</span>
+              </div>
+            </div>
+
+            {/* Data Entry Fields */}
+            <form onSubmit={handleSubmitClosingChecklist}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Actual Physical Counted Cash (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="ios-input"
+                    placeholder={`Expected: ₹${expectedCash.toFixed(0)}`}
+                    value={actualCash}
+                    onChange={(e) => setActualCash(e.target.value)}
+                    required
+                  />
+                  {actualCash !== '' && (
+                    <div style={{ fontSize: 11, marginTop: 2, color: diffCash >= 0 ? '#16A34A' : '#EF4444' }}>
+                      Diff: {diffCash >= 0 ? `+₹${diffCash.toFixed(0)}` : `-₹${Math.abs(diffCash).toFixed(0)}`}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Actual Card POS Machine Batch Total (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="ios-input"
+                    placeholder={`Expected: ₹${expectedCard.toFixed(0)}`}
+                    value={actualCard}
+                    onChange={(e) => setActualCard(e.target.value)}
+                    required
+                  />
+                  {actualCard !== '' && (
+                    <div style={{ fontSize: 11, marginTop: 2, color: diffCard >= 0 ? '#16A34A' : '#EF4444' }}>
+                      Diff: {diffCard >= 0 ? `+₹${diffCard.toFixed(0)}` : `-₹${Math.abs(diffCard).toFixed(0)}`}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                    Actual UPI Merchant App Settlements (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    className="ios-input"
+                    placeholder={`Expected: ₹${expectedUpi.toFixed(0)}`}
+                    value={actualUpi}
+                    onChange={(e) => setActualUpi(e.target.value)}
+                    required
+                  />
+                  {actualUpi !== '' && (
+                    <div style={{ fontSize: 11, marginTop: 2, color: diffUpi >= 0 ? '#16A34A' : '#EF4444' }}>
+                      Diff: {diffUpi >= 0 ? `+₹${diffUpi.toFixed(0)}` : `-₹${Math.abs(diffUpi).toFixed(0)}`}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Threshold Variance Reason Check (FR-P8 Requirement) */}
+              {hasVarianceAlert && (
+                <div
+                  style={{
+                    background: '#FEE2E2',
+                    border: '1px solid #FCA5A5',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 14
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#DC2626', fontWeight: 700, fontSize: 13 }}>
+                    <AlertTriangle size={16} />
+                    <span>Variance Exceeds Threshold (₹200 Gap)</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#B91C1C', marginTop: 2, marginBottom: 8 }}>
+                    Total discrepancy of ₹{Math.abs(totalVariance).toFixed(0)}. An audit explanation note is mandatory.
+                  </div>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    placeholder="Reason (e.g. Table 4 cash tip rounded down, bank UPI delayed sync)"
+                    value={varianceReason}
+                    onChange={(e) => setVarianceReason(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+
+              <button type="submit" className="btn-primary-pill full-width">
+                <CheckCircle2 size={16} />
+                <span>Submit Closing Report & Save to Owner P&L</span>
+              </button>
+            </form>
+
+            {checklistSubmitted && (
+              <div
+                style={{
+                  marginTop: 14,
+                  background: '#DCFCE7',
+                  border: '1px solid #86EFAC',
+                  padding: 12,
+                  borderRadius: 14,
+                  color: '#16A34A',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                <Check size={16} strokeWidth={3} />
+                <span>Daily Sales Closing Report successfully recorded for Owner!</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Reject Order Modal */}
+      {rejectOrderId && (
+        <div className="modal-overlay" onClick={() => setRejectOrderId(null)}>
+          <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-drag-pill" />
+            <div className="card-heading" style={{ fontSize: 18, marginBottom: 4 }}>
+              Reject Ticket {rejectOrderId}
+            </div>
+            <div className="card-meta-text" style={{ marginBottom: 14 }}>
+              Customer will be notified with this specific reason.
+            </div>
+
+            <select
+              className="ios-select"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              style={{ marginBottom: 16 }}
+            >
+              <option value="Item ingredient out of stock">Item ingredient out of stock</option>
+              <option value="Kitchen rush / temporarily paused">Kitchen rush / temporarily paused</option>
+              <option value="Closing hours reached">Closing hours reached</option>
+              <option value="Custom note cannot be accommodated">Custom note cannot be accommodated</option>
+            </select>
+
+            <button
+              className="btn-primary-pill full-width"
+              style={{ background: '#DC2626' }}
+              onClick={handleRejectSubmit}
+            >
+              Confirm Rejection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Price Edit Modal */}
+      {editingItem && (
+        <div className="modal-overlay" onClick={() => setEditingItem(null)}>
+          <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-drag-pill" />
+            <div className="card-heading" style={{ marginBottom: 4 }}>
+              Edit Price: {editingItem.name}
+            </div>
+            <div className="card-meta-text" style={{ marginBottom: 14 }}>
+              Current Price: ₹{editingItem.price.toFixed(0)}
+            </div>
+
+            <input
+              type="number"
+              step="5"
+              className="ios-input"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              style={{ marginBottom: 16 }}
+              autoFocus
+            />
+
+            <button className="btn-primary-pill full-width" onClick={handleSavePrice}>
+              Save Updated Price (₹)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 2: Hardware ESC/POS Printer Modal */}
+      {selectedPrintOrder && (
+        <PrinterModal
+          order={selectedPrintOrder}
+          theme={theme}
+          chef={chef}
+          onClose={() => setSelectedPrintOrder(null)}
+        />
+      )}
+
+      {/* Phase 2: WhatsApp Alerts Simulator Modal */}
+      {selectedWhatsAppOrder && (
+        <WhatsAppAlertModal
+          order={selectedWhatsAppOrder}
+          theme={theme}
+          chef={chef}
+          onClose={() => setSelectedWhatsAppOrder(null)}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,284 @@
+--- PAGE 1 ---
+PRD: QR Ordering & Back-Office Web App for
+Local Restaurants
+Version: 0.1 (Draft) | Date: 15 Oct 2026 | Status: For review
+1. Overview
+A web-based platform (no app install) for small local businesses such as restaurants,
+cafés and food stalls. Customers scan a QR code at the table or counter, browse the
+menu, place an order and add notes. The counterperson receives and processes orders in
+real time. The owner gets sales records, profit and loss insight and daily operational
+checklists.
+The product has three interfaces: Customer, Counterperson and Admin (Owner).
+2. Problem Statement
+Small restaurants typically run on paper slips, verbal orders and a basic billing machine.
+This causes:
+Missed or wrongly taken orders, especially during rush hours.
+Queues at the counter and staff time wasted on order taking.
+No clear daily picture of sales, expenses and real profit.
+Cash crunches at month-end because aggregator settlements are delayed while
+salaries, rent and EMIs are fixed.
+Manual, error-prone cash reconciliation and payroll calculation.
+Expensive existing POS systems that are built for larger chains.
+3. Goals and Non-Goals
+Goals (Phase 1)
+1. Let customers order from their phone via QR without installing anything.
+2. Give the counter a live order queue with simple status control.
+3. Give the owner daily sales visibility and a basic profit and loss view.
+4. Let the owner customize the customer landing page without a developer.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 1 of 9
+
+--- PAGE 2 ---
+5. Be usable by non-technical staff with almost no training.
+Non-Goals (Phase 1)
+Full accounting software replacement or GST filing.
+Delivery logistics and rider management.
+Direct integration with Zomato/Swiggy.
+Inventory and recipe costing (planned for later phases).
+Multi-branch management.
+4. Target Users and Personas
+5. Scope: Phase 1 Features
+5.1 Customer Interface (opened via QR)
+FR-C1 QR landing. Each QR code opens the business's menu page. QR can be per table
+(table number embedded) or per counter.
+FR-C2 Menu browsing. Categories, item name, photo (optional), price, veg/non-veg tag,
+availability status. Items marked unavailable are greyed out.
+FR-C3 Cart. Select item, set quantity, add or remove items, see running total.
+FR-C4 Notes. Per-item note and an overall order note (for example less spicy, no onion).
+FR-C5 Order placement. Customer enters name or table number (phone number
+optional) and confirms the order. An order ID is shown.
+FR-C6 Order status. Customer sees live status: Received, Accepted, Ready, Done.
+Persona
+Description
+Key need
+Customer
+Walk-in diner with a smartphone
+Fast, simple ordering without
+waiting for staff
+Counterperson
+Cashier or captain, low technical
+skill
+See new orders instantly, update
+status, adjust prices and offers
+Owner/Admin
+Business owner, often also
+working on the floor
+Know daily sales, profit and cash
+position at a glance
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 2 of 9
+
+--- PAGE 3 ---
+FR-C7 Payment (Phase 1 simple). Pay at counter by default. Optional UPI deep link or QR
+display for the amount. Online gateway integration is a Phase 2 item.
+FR-C8 Suggestables. Show suggested add-ons (for example a cold drink with a burger)
+configured by the counter or owner.
+5.2 Counterperson Interface
+FR-P1 Live order stack. New orders appear automatically with sound and visual alert, plus
+browser push notification where supported.
+FR-P2 Status control. One-tap buttons: Accept, Ready, Done. Optional Reject with a
+reason (for example item out of stock).
+FR-P3 Order details. Items, quantity, notes, table or customer name, time since order,
+payment status.
+FR-P4 Menu and price edits. Edit item price, mark items available or unavailable.
+FR-P5 Discounts and offers. Create a percentage or flat discount, combo offer, or time-
+limited offer. Permission level is set by the owner.
+FR-P6 Branding and suggestables. Upload logo, set suggested add-ons.
+FR-P7 Manual order entry. Counterperson can punch in a phone or walk-in order so all
+sales are recorded in one place.
+FR-P8 Daily closing checklist (see 5.4).
+5.3 Admin (Owner) Interface
+FR-A1 Sales dashboard. Total orders, total sales for today, this week and this month. Split
+by payment mode (cash, card, UPI).
+FR-A2 Order history. Searchable and filterable list with export to CSV.
+FR-A3 Profit and loss graph. Daily revenue vs. expenses, with net profit or loss line.
+Expenses are entered manually in Phase 1 (ingredients, rent, utilities, salary, other).
+FR-A4 Top items. Best and worst selling items and peak hours.
+FR-A5 Customer page customization. Theme colors, logo, banner image, fonts from a
+limited preset list, menu layout (list or grid), welcome message, featured items.
+FR-A6 User management. Create counterperson accounts, reset passwords, set
+permissions (can edit price, can create discounts).
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 3 of 9
+
+--- PAGE 4 ---
+FR-A7 Menu management. Full create, edit and delete of categories and items.
+5.4 Daily and Monthly Checklists (Operational Module)
+These are guided checklists with data entry fields. Phase 1 covers a lightweight version;
+automation grows in later phases.
+Daily: Cash and Sales
+System shows expected totals by payment mode (cash, card, UPI) from recorded
+orders.
+Counterperson enters actual counted cash and actual card and UPI settlements.
+System highlights the difference per mode and requires a short reason if the gap
+exceeds a configurable threshold.
+Auto-generated daily sales report (PDF or screen) is saved for the owner.
+Daily and Monthly: Profit and Loss and Cash Flow
+Compile sales and manually entered expenses into a P&L statement (daily, monthly).
+Track pending settlements from online aggregators as a separate line, so the owner
+sees receivable money vs. cash in hand.
+Cash vs. profit check: show net profit alongside actual cash position and upcoming
+fixed obligations (salary, rent, EMI). Alert when cash in hand plus expected
+settlements is below upcoming obligations.
+Bank statement reconciliation: Phase 1 is manual tick-off; CSV import is Phase 2.
+Monthly: Payroll
+Staff list with monthly wage, attendance (manual daily mark-in, mark-out).
+Auto-calculate gross pay, deductions (PF, ESI, TDS where applicable) and net pay.
+Reminder to have salaries ready before the 1st of the next month.
+Payslip export per employee.
+Note: statutory rates and thresholds must be configurable and verified with an
+accountant before launch, because rules change.
+6. User Flows
+Order flow: Customer scans QR → sees menu → adds items, quantity, notes → confirms →
+order appears at counter with alert → counterperson taps Accept → Ready → Done →
+customer sees status update at each step.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 4 of 9
+
+--- PAGE 5 ---
+End-of-day flow: Counterperson opens closing checklist → enters counted cash and
+settlement figures → reviews differences → submits → owner sees the daily report and
+P&L point on the graph.
+7. Non-Functional Requirements
+Performance: Customer page loads in under 3 seconds on a 4G connection. Design
+mobile-first and keep the page lightweight.
+Real-time: New order reaches the counter within 2 seconds (WebSockets or server-
+sent events with polling fallback).
+Reliability: Counter interface should tolerate short internet drops (queue and retry,
+clear offline banner).
+Security: Role-based access, hashed passwords, HTTPS only, per-business data
+isolation.
+Data privacy: Collect minimum customer data. Comply with India's DPDP Act where
+applicable.
+Accessibility and language: Large tap targets; support English plus at least one
+regional language (Hindi in Phase 1) for the customer and counter views.
+Backup: Daily automated backup of order and financial data.
+8. Suggested Tech Approach
+Frontend: React or Next.js as a PWA (installable on the counter tablet or phone).
+Backend: Node.js (or Django) with REST APIs and WebSockets.
+Database: PostgreSQL with a business ID on every table (multi-tenant).
+Notifications: In-app sound alerts, Web Push, optional WhatsApp or SMS later.
+Hosting: Managed cloud with a low-cost starting tier.
+QR: Generated per business and per table; encodes a URL like
+app.com/b/<business>/t/<table> .
+9. Data Model (High Level)
+Business, User (role), MenuCategory, MenuItem, Offer, Order, OrderItem, Payment,
+Expense, SettlementEntry, Employee, AttendanceLog, PayrollRecord,
+ChecklistSubmission, ThemeSettings.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 5 of 9
+
+--- PAGE 6 ---
+10. Success Metrics
+11. Phased Roadmap
+Phase 1 (MVP, about 10 to 12 weeks): Sections 5.1 to 5.3 plus a lightweight closing
+checklist and manual-entry P&L. Pilot with 3 to 5 restaurants.
+Phase 2: Online payments (UPI gateway), automated payroll, bank CSV import,
+WhatsApp order alerts, kitchen display screen, printer integration.
+Phase 3: Inventory and wastage, loyalty and repeat-customer offers, aggregator
+reconciliation, multi-branch, accounting export (Tally, Zoho).
+12. Risks and Dependencies
+Staff must adopt the counter screen; if they ignore it, the whole flow breaks.
+Weak internet at the outlet.
+Payroll and tax rules are sensitive; errors have legal consequences.
+Payment gateway onboarding and fees.
+Competition from free or cheap incumbents.
+13. Open Questions
+1. Will the business pay a monthly subscription, or a per-order fee, or both?
+Metric
+Phase 1 target
+Share of dine-in orders placed via QR at pilot
+outlets
+40% or more within 60 days
+Order alert to Accept time
+Under 60 seconds average
+Order errors (wrong or missed items)
+30% reduction vs. baseline
+Daily closing checklist completion
+80% of operating days
+Owner opens dashboard
+5 or more days per week
+Pilot businesses retained after free trial
+60% or more
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 6 of 9
+
+--- PAGE 7 ---
+2. Is billing and GST invoicing required inside the app in Phase 1, or will the existing POS
+stay?
+3. Should customers pay before the order reaches the kitchen, or after eating?
+4. Which regional languages are needed for the first pilot city?
+5. Will the counter use a tablet, a phone or a PC?
+14. Why This Will Work for Small Businesses
+1. Zero install for customers. A QR and a browser is a very low barrier; people already
+use UPI and QR codes daily.
+2. Saves labor. One counter person can handle more orders, since customers type their
+own orders. This matters when staff is only two to five people.
+3. Fewer order mistakes. Written notes (less spicy, no onion) travel exactly as typed
+instead of by shouting.
+4. Visibility the owner does not have today. Most small owners guess their profit. A daily
+sales and P&L graph is a real upgrade.
+5. Addresses a real pain point. The cash-versus-profit check and the pending settlement
+tracker speak directly to month-end cash crunches caused by aggregator delays and
+fixed costs.
+6. Upselling built in. Suggestables and offers increase average order value with no extra
+effort.
+7. Cheaper than traditional POS. Runs on hardware they already own (a phone or tablet);
+no heavy setup.
+8. Customizable branding. Even a tiny café can look professional, which builds trust.
+9. Growth path. Starting with ordering, then adding payroll and reconciliation, makes the
+product a daily habit rather than a one-off tool.
+10. Simple to pilot. Works at a single outlet with no integration into other systems.
+15. Why This May Not Work for Small Businesses
+1. Low digital comfort. Owners and staff may find a multi-feature dashboard
+intimidating. Too many features (payroll, P&L) in the first version can reduce adoption.
+2. Staff resistance. The counterperson already has a working routine. If an alert is missed
+once or twice, they revert to verbal orders and the system loses trust.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 7 of 9
+
+--- PAGE 8 ---
+3. Customer behavior. Many customers, especially older people or those in low-end
+smartphone or low-data situations, prefer to just tell the waiter. QR ordering suits
+cafés and food courts better than a family dhaba.
+4. Unreliable internet. A dropped connection at the counter means missed orders, which
+is worse than paper.
+5. Data entry burden. P&L and payroll are only as accurate as the data entered. Small
+owners rarely track expenses daily; manual entry may be skipped, making the graphs
+misleading.
+6. Compliance risk. PF, ESI and TDS rules depend on employee count, wage thresholds
+and state. Wrong calculations can create legal trouble. Many small restaurants also
+keep cash or informal payroll, which the app cannot fix.
+7. Existing competition. Free or low-cost tools (Petpooja, Zomato and Swiggy partner
+tools, PhonePe or Paytm business apps, free QR menu makers) already cover parts of
+this. You need a clear difference.
+8. Price sensitivity. Small businesses resist monthly fees. If the value is not obvious
+within the first week, they cancel.
+9. Aggregator dependence. Reconciling aggregator payouts well needs data from those
+platforms, which are not open. Without integrations, this stays a manual process.
+10. Support burden. Selling to many tiny businesses means constant onboarding and
+phone support, which can cost more than the subscription brings in.
+11. Scope risk for a small team. Three interfaces, notifications, graphs, checklists and
+payroll is a lot to build well.
+16. Recommendations to Improve Chances of Success
+Start narrow: Ship QR ordering and the counter order stack first; they are the daily-
+use core. Add the P&L graph and checklists after the first pilot proves usage.
+Make the counter screen idiot-proof: large buttons, loud sound alert, and a fallback
+reminder if an order sits unaccepted for 2 minutes.
+Support pay-at-counter as the default so the flow does not depend on payment
+integrations.
+Pilot with 3 to 5 friendly outlets (cafés, fast-food counters, juice and snack shops),
+observe them in person and iterate.
+Reduce data entry: one-tap expense categories, recurring expenses (rent, salary) set
+once, and a daily reminder.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 8 of 9
+
+--- PAGE 9 ---
+Treat payroll as an assistant, not a source of truth: provide calculation templates with
+editable rates and a clear note to confirm with an accountant.
+Price simply: a free tier for one outlet with limited features, then a flat low monthly fee.
+Pick a niche first (for example cafés or quick-service counters) before trying to serve
+all local businesses.
+PRD: QR Ordering & Back-Office Web App for Local Restaurants
+Page 9 of 9
