@@ -118,17 +118,20 @@ export default function App() {
         setActiveTab('menu');
       }
 
-      const hash = window.location.hash.replace('#', '').replace('/', '').toLowerCase();
+      const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+      const rawHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+      const route = rawHash || rawPath;
+
       let targetRole = null;
-      if (hash === 'chef') targetRole = 'chef';
-      else if (hash === 'counter' || hash === 'pos') targetRole = 'counter';
-      else if (hash === 'kds' || hash === 'kitchen') targetRole = 'kds';
-      else if (hash === 'admin' || hash === 'owner') targetRole = 'admin';
-      else if (hash === 'portal' || hash === 'staff') {
+      if (route === 'chef') targetRole = 'chef';
+      else if (route === 'counter' || route === 'pos') targetRole = 'counter';
+      else if (route === 'kds' || route === 'kitchen') targetRole = 'kds';
+      else if (route === 'admin' || route === 'owner') targetRole = 'admin';
+      else if (route === 'portal' || route === 'staff') {
         // Floor staff portal entry
         setAuthModal({ isOpen: true, targetRole: 'counter' });
         return;
-      } else if (hash === 'customer' || hash === 'menu' || hash === '') {
+      } else if (route === 'customer' || route === 'menu' || route === '') {
         targetRole = 'customer';
       }
 
@@ -148,7 +151,11 @@ export default function App() {
 
     syncFromUrl();
     window.addEventListener('hashchange', syncFromUrl);
-    return () => window.removeEventListener('hashchange', syncFromUrl);
+    window.addEventListener('popstate', syncFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncFromUrl);
+      window.removeEventListener('popstate', syncFromUrl);
+    };
   }, []);
 
   // Active in-progress orders count
