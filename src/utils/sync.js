@@ -5,9 +5,15 @@
 import {
   syncOrderToCloud,
   syncStatusToCloud,
+  syncServerCallToCloud,
   subscribeToCloudOrders,
-  isCloudSyncEnabled
+  subscribeToCloudServerCalls,
+  isCloudSyncEnabled,
+  getCloudSyncState,
+  subscribeCloudSyncState
 } from './firebaseSync';
+
+export { getCloudSyncState, subscribeCloudSyncState, isCloudSyncEnabled };
 
 const CHANNEL_NAME = 'advait_restaurant_pos_channel_v1';
 
@@ -65,6 +71,8 @@ export function broadcastSyncEvent(type, payload = {}) {
     syncOrderToCloud(payload).catch(() => {});
   } else if (type === SYNC_EVENTS.ORDER_STATUS_UPDATED && payload && payload.id) {
     syncStatusToCloud(payload.id, payload).catch(() => {});
+  } else if (type === SYNC_EVENTS.CALL_SERVER && payload) {
+    syncServerCallToCloud(payload).catch(() => {});
   }
 }
 
@@ -76,6 +84,7 @@ export function subscribeSyncEvents(callback) {
 
   const handleBroadcast = (event) => {
     if (event && event.data && callback) {
+      // Don't echo own events if sent locally
       callback(event.data);
     }
   };
@@ -109,14 +118,17 @@ export function subscribeSyncEvents(callback) {
   window.addEventListener('storage', handleStorage);
 
   // Subscribe to Cloud Sync if configured
-  let unsubscribeCloud = null;
+  let unsubscribeCloudOrders = null;
+  let unsubscribeCloudServerCalls = null;
+
   if (isCloudSyncEnabled()) {
-    unsubscribeCloud = subscribeToCloudOrders(
-      (newOrder) => {
+    unsubscribeCloudOrders = subscribeToCloudOrders(
+      (newOrder, isInitial) => {
         if (callback && newOrder && newOrder.id) {
           callback({
             type: SYNC_EVENTS.NEW_ORDER,
-            payload: newOrder
+            payload: newOrder,
+            isInitial
           });
         }
       },
@@ -129,6 +141,15 @@ export function subscribeSyncEvents(callback) {
         }
       }
     );
+
+    unsubscribeCloudServerCalls = subscribeToCloudServerCalls((callData) => {
+      if (callback && callData) {
+        callback({
+          type: SYNC_EVENTS.CALL_SERVER,
+          payload: callData
+        });
+      }
+    });
   }
 
   // Return unsubscribe cleanup function
@@ -137,8 +158,11 @@ export function subscribeSyncEvents(callback) {
       broadcastChannel.removeEventListener('message', handleBroadcast);
     }
     window.removeEventListener('storage', handleStorage);
-    if (unsubscribeCloud) {
-      unsubscribeCloud();
+    if (unsubscribeCloudOrders) {
+      unsubscribeCloudOrders();
+    }
+    if (unsubscribeCloudServerCalls) {
+      unsubscribeCloudServerCalls();
     }
   };
 }

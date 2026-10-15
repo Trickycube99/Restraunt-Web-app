@@ -93,13 +93,17 @@ export default function App() {
           if (prev.some((o) => o.id === msg.payload.id)) return prev;
           return [msg.payload, ...prev];
         });
-        if (!isSoundMuted && (currentRole === 'counter' || currentRole === 'kds')) {
+        if (!isSoundMuted && !msg.isInitial && (currentRole === 'counter' || currentRole === 'kds')) {
           playNewOrderChime();
         }
       } else if (msg.type === SYNC_EVENTS.ORDER_STATUS_UPDATED) {
-        setOrders((prev) =>
-          prev.map((o) => (o.id === msg.payload.id ? { ...o, ...msg.payload } : o))
-        );
+        setOrders((prev) => {
+          const exists = prev.some((o) => o.id === msg.payload.id);
+          if (exists) {
+            return prev.map((o) => (o.id === msg.payload.id ? { ...o, ...msg.payload } : o));
+          }
+          return [msg.payload, ...prev];
+        });
       } else if (msg.type === 'DIRECT_ORDERS_SYNC') {
         if (Array.isArray(msg.payload)) {
           setOrders(msg.payload);

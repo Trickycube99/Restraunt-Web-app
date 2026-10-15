@@ -17,10 +17,13 @@ import {
   LogOut,
   Volume2,
   VolumeX,
-  Globe
+  Globe,
+  Cloud
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
 import { canKdsReturnToAdmin, canKdsReturnToCounter } from '../utils/auth';
+import { getCloudSyncState, subscribeCloudSyncState } from '../utils/sync';
+import CloudSyncModal from './CloudSyncModal';
 
 export default function Header({
   chef,
@@ -49,6 +52,13 @@ export default function Header({
   const [activeBranch, setActiveBranch] = useState('Connaught Place, New Delhi');
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showTableModal, setShowTableModal] = useState(false);
+  const [cloudSyncState, setCloudSyncState] = useState(getCloudSyncState());
+  const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
+
+  React.useEffect(() => {
+    const unsub = subscribeCloudSyncState(setCloudSyncState);
+    return unsub;
+  }, []);
 
   const branches = [
     'Connaught Place, New Delhi (Flagship)',
@@ -481,6 +491,38 @@ export default function Header({
 
         {/* Right: Staff Profile, Sound Toggle, QR Standees, Reset & Logout */}
         <div className="header-right">
+          {/* Real-Time Cloud Sync Indicator Pill */}
+          <button
+            className="btn-secondary-pill cloud-sync-badge-pill"
+            onClick={() => {
+              playTapSound();
+              setShowCloudSyncModal(true);
+            }}
+            style={{
+              padding: '4px 9px',
+              fontSize: 11,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              borderColor: cloudSyncState.status === 'connected' ? '#BBF7D0' : cloudSyncState.status === 'error' ? '#FECACA' : '#E5E7EB',
+              background: cloudSyncState.status === 'connected' ? '#F0FDF4' : cloudSyncState.status === 'error' ? '#FEF2F2' : '#F9FAFB',
+              color: cloudSyncState.status === 'connected' ? '#15803D' : cloudSyncState.status === 'error' ? '#DC2626' : '#4B5563'
+            }}
+            title="Cross-Device Cloud Sync Diagnostics (Tap to inspect)"
+          >
+            <Cloud size={12} color={cloudSyncState.status === 'connected' ? '#16A34A' : cloudSyncState.status === 'error' ? '#DC2626' : '#64748B'} />
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: '50%',
+              backgroundColor: cloudSyncState.status === 'connected' ? '#16A34A' : cloudSyncState.status === 'error' ? '#DC2626' : '#9CA3AF'
+            }} />
+            <span className="cloud-sync-label">
+              {cloudSyncState.status === 'connected' ? 'Cloud Live' : cloudSyncState.status === 'error' ? 'Sync Issue' : 'Local Sync'}
+            </span>
+          </button>
+
           {/* Active Staff Operator Badge */}
           <div className="header-auth-profile-pill">
             <User size={13} color="#007AFF" />
@@ -563,6 +605,11 @@ export default function Header({
           </div>
         </div>
       )}
+      {/* Cloud Sync Diagnostic & Rules Modal */}
+      <CloudSyncModal
+        isOpen={showCloudSyncModal}
+        onClose={() => setShowCloudSyncModal(false)}
+      />
     </>
   );
 }
