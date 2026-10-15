@@ -264,33 +264,40 @@ export function isAuthenticated(role, activeSessionRole = null) {
   const sessions = getStoredSessions();
   if (!sessions) return false;
 
-  // Direct active session for this role
+  // 1. Admin Master session can access Counter, Kitchen, and Chef without password
+  if (sessions[ROLES.ADMIN] && sessions[ROLES.ADMIN].token) {
+    if (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF || role === ROLES.ADMIN) {
+      return true;
+    }
+  }
+
+  // 2. Counter session can access Kitchen without password
+  if (sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
+    if (role === ROLES.COUNTER || role === ROLES.KDS) {
+      return true;
+    }
+  }
+
+  // 3. Active session role in state
+  if (activeSessionRole) {
+    if (activeSessionRole === ROLES.ADMIN && (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF || role === ROLES.ADMIN)) {
+      return true;
+    }
+    if (activeSessionRole === ROLES.COUNTER && (role === ROLES.COUNTER || role === ROLES.KDS)) {
+      return true;
+    }
+  }
+
+  // 4. KDS DIRECT ACCESS RULE:
+  // KDS asks for password EVERY TIME it is accessed directly (not through Admin or Counter).
+  // Direct KDS access never bypasses password using cached token.
+  if (role === ROLES.KDS) {
+    return false;
+  }
+
+  // 5. Direct active session for other roles (Counter, Admin, Chef)
   if (sessions[role] && sessions[role].token) {
     return true;
-  }
-
-  // Admin Master session can access Counter, Kitchen, and Chef
-  if (sessions[ROLES.ADMIN] && sessions[ROLES.ADMIN].token) {
-    if (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF) {
-      return true;
-    }
-  }
-
-  // Counter session can access Kitchen ONLY
-  if (sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
-    if (role === ROLES.KDS) {
-      return true;
-    }
-  }
-
-  // Active session role in state
-  if (activeSessionRole) {
-    if (activeSessionRole === ROLES.ADMIN && (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF)) {
-      return true;
-    }
-    if (activeSessionRole === ROLES.COUNTER && role === ROLES.KDS) {
-      return true;
-    }
   }
 
   return false;

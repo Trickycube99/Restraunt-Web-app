@@ -150,6 +150,11 @@ export default function App() {
       }
 
       if (targetRole) {
+        // If already on this active role, do not re-prompt
+        if (targetRole === currentRole) {
+          return;
+        }
+
         if (targetRole === 'customer' || isAuthenticated(targetRole, currentRole)) {
           setCurrentRole(targetRole);
           if (targetRole === 'customer') setActiveTab('menu');
@@ -246,6 +251,14 @@ export default function App() {
     if (role !== 'customer' && !isAuthenticated(role, currentRole)) {
       setAuthModal({ isOpen: true, targetRole: role });
       return;
+    }
+
+    // If leaving KDS as a direct kitchen login, clean up direct session
+    if (currentRole === 'kds' && role !== 'kds') {
+      if (!hasAdminAccess && !hasCounterAccess) {
+        logoutRole(ROLES.KDS);
+        setAuthSessions(getStoredSessions());
+      }
     }
 
     setCurrentRole(role);
@@ -477,7 +490,12 @@ export default function App() {
         targetRole={authModal.targetRole}
         activeSessionRole={authSessions?.admin?.token ? 'admin' : authSessions?.counter?.token ? 'counter' : currentRole}
         onSuccess={handleAuthSuccess}
-        onClose={() => setAuthModal({ isOpen: false, targetRole: null })}
+        onClose={() => {
+          setAuthModal({ isOpen: false, targetRole: null });
+          if (currentRole !== authModal.targetRole) {
+            window.location.hash = currentRole || 'customer';
+          }
+        }}
         theme={theme}
       />
 

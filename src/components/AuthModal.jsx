@@ -355,18 +355,19 @@ export default function AuthModal({
               <div className="auth-input-group">
                 <label className="auth-label">
                   <KeyRound size={13} />
-                  <span>Station Security PIN</span>
+                  <span>Kitchen Station Password / Security PIN</span>
                 </label>
                 <input
                   type="password"
                   required
-                  placeholder="Enter PIN (Kitchen: 7700, Counter: 4421, Admin: 8821)"
+                  placeholder="Enter Kitchen Password (Demo: 7700)"
                   className="auth-input"
                   maxLength={4}
                   value={formData.pin || ''}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                   autoFocus
                 />
+                <span className="auth-hint">Direct kitchen access requires station password authentication on every entry.</span>
               </div>
             </>
           )}
