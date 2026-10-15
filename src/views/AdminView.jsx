@@ -1737,6 +1737,26 @@ export default function AdminView({
               </div>
             </div>
 
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                UPI Merchant ID / VPA (Customer QR & Instant App Payment)
+              </label>
+              <input
+                type="text"
+                className="ios-input"
+                placeholder="e.g. 9119069179@nyes"
+                value={theme.upiId || '9119069179@nyes'}
+                onChange={(e) => {
+                  const updated = { ...theme, upiId: e.target.value.trim() };
+                  setTheme(updated);
+                  broadcastSyncEvent(SYNC_EVENTS.THEME_UPDATED, updated);
+                }}
+              />
+              <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                Customer instant UPI QR code scans and app redirects (GPay, PhonePe, Paytm, CRED) will directly credit this UPI address.
+              </div>
+            </div>
+
             <div style={{ background: '#F9FAFB', padding: 12, borderRadius: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>FSSAI Verified Chef Display</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>

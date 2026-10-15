@@ -378,6 +378,7 @@ export const initialTheme = {
   menuLayout: "grid",
   fontPreset: "SF Pro / Inter",
   logoText: "AD",
+  upiId: "9119069179@nyes",
   tables: ["Table 01", "Table 02", "Table 03", "Table 04", "Table 05", "Table 06", "Table 07", "Counter / Takeaway"],
   pendingAggregatorSettlement: 28500, // Zomato / Swiggy pending settlement
   cashInHand: 45000,

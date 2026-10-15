@@ -23,8 +23,10 @@ import {
   User,
   Edit2,
   Utensils,
-  Tag
+  Tag,
+  Copy
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import { getTranslation } from '../utils/i18n';
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
@@ -94,6 +96,8 @@ export default function CustomerView({
   const [promoInput, setPromoInput] = useState('');
   const [promoMessage, setPromoMessage] = useState('');
   const [showUpiModal, setShowUpiModal] = useState(false);
+  const [copiedUpi, setCopiedUpi] = useState(false);
+  const [localQrDataUrl, setLocalQrDataUrl] = useState('');
   const [serverCalledAlert, setServerCalledAlert] = useState(false);
   const secretTapCount = useRef(0);
   const secretTapTimer = useRef(null);
@@ -392,9 +396,45 @@ export default function CustomerView({
   };
 
   // Dynamic UPI Deep Link URL for native mobile apps (GPay, PhonePe, Paytm, CRED)
-  const upiVpa = 'advaitkitchen@icici';
-  const upiPayUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(theme.restaurantName || 'Advait Kitchen')}&am=${cartTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${activeTable} Order`)}`;
-  const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiPayUrl)}`;
+  const upiVpa = theme?.upiId || '9119069179@nyes';
+  const payeeRestaurantName = theme?.restaurantName || 'Advait Artisanal Kitchen';
+  const upiPayUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(payeeRestaurantName)}&am=${cartTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${activeTable || 'Dine-In'} Order`)}`;
+  const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiPayUrl)}`;
+
+  // Generate crisp local in-browser QR code (instant rendering, zero third-party latency or downtime)
+  useEffect(() => {
+    let isMounted = true;
+    QRCode.toDataURL(upiPayUrl, {
+      width: 240,
+      margin: 1,
+      color: {
+        dark: '#0F172A',
+        light: '#FFFFFF'
+      }
+    }).then((url) => {
+      if (isMounted) setLocalQrDataUrl(url);
+    }).catch((err) => {
+      console.warn('Local QR generation fallback to web URL', err);
+    });
+    return () => { isMounted = false; };
+  }, [upiPayUrl]);
+
+  const handleCopyUpi = () => {
+    playTapSound();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(upiVpa).then(() => {
+        setCopiedUpi(true);
+        playSuccessChime();
+        setTimeout(() => setCopiedUpi(false), 2500);
+      }).catch(() => {
+        setCopiedUpi(true);
+        setTimeout(() => setCopiedUpi(false), 2500);
+      });
+    } else {
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2500);
+    }
+  };
 
   // Mandatory Diner Name Pop-up Modal Component
   const renderNameModal = () => {
@@ -1336,8 +1376,8 @@ export default function CustomerView({
               {/* Dynamic QR Code Display for the amount (FR-C7) */}
               <div
                 style={{
-                  width: 210,
-                  height: 210,
+                  width: 220,
+                  height: 220,
                   background: '#FFFFFF',
                   border: '3px solid #111827',
                   borderRadius: 18,
@@ -1351,12 +1391,13 @@ export default function CustomerView({
                 }}
               >
                 <img
-                  src={qrCodeApiUrl}
-                  alt={`UPI QR for ₹${cartTotal.toFixed(0)}`}
+                  src={localQrDataUrl || qrCodeApiUrl}
+                  alt={`UPI QR for ₹${cartTotal.toFixed(0)} to ${upiVpa}`}
                   style={{ width: 170, height: 170, objectFit: 'contain' }}
                   onError={(e) => {
-                    // Fallback to internal vector icon if external QR fails
-                    e.target.style.display = 'none';
+                    if (e.target.src !== qrCodeApiUrl) {
+                      e.target.src = qrCodeApiUrl;
+                    }
                   }}
                 />
                 <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4, color: '#007AFF' }}>
@@ -1364,11 +1405,55 @@ export default function CustomerView({
                 </div>
               </div>
 
-              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-                UPI ID: <strong>{upiVpa}</strong>
-                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                  Payee: {theme.restaurantName} • Table: {activeTable}
+              {/* UPI ID Pill with 1-tap Copy */}
+              <div
+                style={{
+                  background: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: 14,
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  marginBottom: 14
+                }}
+              >
+                <div style={{ textAlign: 'left', minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>
+                    Pay to UPI ID (VPA)
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', wordBreak: 'break-all' }}>
+                    {upiVpa}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                    Payee: {payeeRestaurantName} • {activeTable}
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyUpi}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: copiedUpi ? '#ECFDF5' : '#007AFF',
+                    color: copiedUpi ? '#059669' : '#FFFFFF',
+                    border: copiedUpi ? '1px solid #A7F3D0' : 'none',
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'all 0.2s ease'
+                  }}
+                  title="Copy UPI ID"
+                >
+                  {copiedUpi ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedUpi ? 'Copied!' : 'Copy'}</span>
+                </button>
               </div>
 
               {/* UPI Deep Link Button for mobile devices (FR-C7) */}
@@ -1376,17 +1461,19 @@ export default function CustomerView({
                 href={upiPayUrl}
                 className="btn-primary-pill full-width"
                 style={{
-                  background: '#8B5CF6',
+                  background: 'linear-gradient(135deg, #7C3AED 0%, #6366F1 100%)',
                   textDecoration: 'none',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
-                  marginBottom: 8
+                  marginBottom: 8,
+                  color: '#FFFFFF',
+                  fontWeight: 700
                 }}
               >
                 <ArrowRight size={16} />
-                <span>Open in GPay / PhonePe App</span>
+                <span>Open in GPay / PhonePe / Paytm</span>
               </a>
 
               <button

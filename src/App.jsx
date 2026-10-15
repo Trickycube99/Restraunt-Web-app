@@ -48,7 +48,10 @@ export default function App() {
   const [expenses, setExpenses] = useState(() => loadData(STORAGE_KEYS.EXPENSES, initialExpenses));
   const [staff, setStaff] = useState(() => loadData(STORAGE_KEYS.STAFF, initialStaff));
   const [offers, setOffers] = useState(() => loadData(STORAGE_KEYS.OFFERS, initialOffers));
-  const [theme, setTheme] = useState(() => loadData(STORAGE_KEYS.THEME, initialTheme));
+  const [theme, setTheme] = useState(() => {
+    const loaded = loadData(STORAGE_KEYS.THEME, initialTheme);
+    return { ...initialTheme, ...loaded, upiId: loaded?.upiId || initialTheme.upiId || '9119069179@nyes' };
+  });
   const [checklists, setChecklists] = useState(() => loadData(STORAGE_KEYS.CHECKLISTS, []));
 
   // Authentication State
@@ -116,6 +119,8 @@ export default function App() {
         setExpenses((prev) => [msg.payload, ...prev]);
       } else if (msg.type === SYNC_EVENTS.CHECKLIST_SUBMITTED) {
         setChecklists((prev) => [msg.payload, ...prev]);
+      } else if (msg.type === SYNC_EVENTS.THEME_UPDATED) {
+        if (msg.payload) setTheme(msg.payload);
       }
     });
 
