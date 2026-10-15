@@ -363,9 +363,10 @@ export const initialStaff = [
 ];
 
 export const initialOffers = [
-  { id: "off-1", code: "ADVAIT10", type: "percent", value: 10, description: "10% Welcome Discount for Table QR Ordering", isActive: true },
-  { id: "off-2", code: "FLAT100", type: "flat", value: 100, description: "₹100 Off on orders above ₹600", isActive: true },
-  { id: "off-3", code: "CHEFCOMBO", type: "flat", value: 80, description: "₹80 Off when ordering Brioche Slider + Shikanji", isActive: true }
+  { id: "off-1", code: "ADVAIT10", type: "percent", value: 10, description: "10% Welcome Discount for Table QR Ordering", minOrderAmount: 0, expiryDate: "2026-12-31", isActive: true },
+  { id: "off-2", code: "FLAT100", type: "flat", value: 100, description: "₹100 Off on orders above ₹600", minOrderAmount: 600, expiryDate: "2026-12-31", isActive: true },
+  { id: "off-3", code: "CHEFCOMBO", type: "flat", value: 80, description: "₹80 Off when ordering Brioche Slider + Shikanji", minOrderAmount: 400, expiryDate: "2026-12-31", isActive: true },
+  { id: "off-4", code: "EARLYBIRD", type: "percent", value: 15, description: "15% Off Early Bird Special", minOrderAmount: 500, expiryDate: "2026-09-30", isActive: false }
 ];
 
 export const initialTheme = {

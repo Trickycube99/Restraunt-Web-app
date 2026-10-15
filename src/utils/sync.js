@@ -6,8 +6,10 @@ import {
   syncOrderToCloud,
   syncStatusToCloud,
   syncServerCallToCloud,
+  syncOffersToCloud,
   subscribeToCloudOrders,
   subscribeToCloudServerCalls,
+  subscribeToCloudOffers,
   isCloudSyncEnabled,
   getCloudSyncState,
   subscribeCloudSyncState
@@ -73,6 +75,8 @@ export function broadcastSyncEvent(type, payload = {}) {
     syncStatusToCloud(payload.id, payload).catch(() => {});
   } else if (type === SYNC_EVENTS.CALL_SERVER && payload) {
     syncServerCallToCloud(payload).catch(() => {});
+  } else if (type === SYNC_EVENTS.OFFERS_UPDATED && Array.isArray(payload)) {
+    syncOffersToCloud(payload).catch(() => {});
   }
 }
 
@@ -120,6 +124,7 @@ export function subscribeSyncEvents(callback) {
   // Subscribe to Cloud Sync if configured
   let unsubscribeCloudOrders = null;
   let unsubscribeCloudServerCalls = null;
+  let unsubscribeCloudOffers = null;
 
   if (isCloudSyncEnabled()) {
     unsubscribeCloudOrders = subscribeToCloudOrders(
@@ -150,6 +155,15 @@ export function subscribeSyncEvents(callback) {
         });
       }
     });
+
+    unsubscribeCloudOffers = subscribeToCloudOffers((cloudOffers) => {
+      if (callback && Array.isArray(cloudOffers)) {
+        callback({
+          type: SYNC_EVENTS.OFFERS_UPDATED,
+          payload: cloudOffers
+        });
+      }
+    });
   }
 
   // Return unsubscribe cleanup function
@@ -163,6 +177,9 @@ export function subscribeSyncEvents(callback) {
     }
     if (unsubscribeCloudServerCalls) {
       unsubscribeCloudServerCalls();
+    }
+    if (unsubscribeCloudOffers) {
+      unsubscribeCloudOffers();
     }
   };
 }

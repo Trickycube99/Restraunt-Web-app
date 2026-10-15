@@ -22,7 +22,8 @@ import {
   Lock,
   User,
   Edit2,
-  Utensils
+  Utensils,
+  Tag
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import { getTranslation } from '../utils/i18n';
@@ -123,11 +124,28 @@ export default function CustomerView({
   const tax = Number((cartSubtotal * 0.05).toFixed(2)); // 5% GST (2.5% CGST + 2.5% SGST)
   const discountAmount = appliedPromo
     ? appliedPromo.type === 'percent'
-      ? Number(((cartSubtotal * appliedPromo.value) / 100).toFixed(2))
-      : Number(Math.min(appliedPromo.value, cartSubtotal).toFixed(2))
+      ? Number(
+          Math.min(
+            appliedPromo.maxDiscount || Infinity,
+            (cartSubtotal * Number(appliedPromo.value)) / 100
+          ).toFixed(2)
+        )
+      : Number(Math.min(Number(appliedPromo.value), cartSubtotal).toFixed(2))
     : 0;
   const cartTotal = Math.max(0, Number((cartSubtotal + tax - discountAmount).toFixed(2)));
   const totalItemCount = cart.reduce((acc, i) => acc + i.quantity, 0);
+
+  // Automatically remove promo if cart drops below required minimum order amount
+  useEffect(() => {
+    if (appliedPromo && appliedPromo.minOrderAmount && cartSubtotal > 0 && cartSubtotal < Number(appliedPromo.minOrderAmount)) {
+      setAppliedPromo(null);
+      setPromoMessage(
+        language === 'hi'
+          ? `कूपन ${appliedPromo.code} हटाया गया: ऑर्डर ₹${appliedPromo.minOrderAmount} से कम है`
+          : `Coupon ${appliedPromo.code} removed: Cart is below minimum ₹${appliedPromo.minOrderAmount}.`
+      );
+    }
+  }, [cartSubtotal, appliedPromo, language]);
 
   // Suggestable item for upsell (FR-C8)
   const suggestableItem = menu.find((item) => item.id === 3) || menu[0];
@@ -216,17 +234,88 @@ export default function CustomerView({
     });
   };
 
-  const handleApplyPromo = () => {
+  // Helper to check if a coupon has expired
+  const isOfferExpired = (offer) => {
+    if (!offer || !offer.expiryDate) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return offer.expiryDate < today;
+  };
+
+  const handleApplyPromo = (codeToApply) => {
     playTapSound();
-    const cleanCode = promoInput.trim().toUpperCase();
-    const found = offers.find((o) => o.code === cleanCode && o.isActive);
-    if (found) {
-      setAppliedPromo(found);
-      setPromoMessage(`✓ Applied: ${found.description}`);
-      playSuccessChime();
-    } else {
-      setPromoMessage(language === 'hi' ? 'अमान्य या समाप्त कूपन कोड' : 'Invalid or expired coupon code');
+    const raw = codeToApply || promoInput;
+    if (!raw || !raw.trim()) {
+      setPromoMessage(language === 'hi' ? 'कृपया कूपन कोड दर्ज करें।' : 'Please enter a coupon code.');
+      playAlertChime();
+      return;
     }
+
+    const cleanCode = raw.trim().toUpperCase();
+    const found = (offers || []).find((o) => o.code && o.code.trim().toUpperCase() === cleanCode);
+
+    if (!found) {
+      setAppliedPromo(null);
+      setPromoMessage(
+        language === 'hi'
+          ? `अमान्य कूपन कोड "${cleanCode}"`
+          : `Coupon "${cleanCode}" does not exist.`
+      );
+      playAlertChime();
+      return;
+    }
+
+    if (!found.isActive) {
+      setAppliedPromo(null);
+      setPromoMessage(
+        language === 'hi'
+          ? `कूपन "${cleanCode}" वर्तमान में निष्क्रिय है`
+          : `Coupon "${cleanCode}" is currently disabled.`
+      );
+      playAlertChime();
+      return;
+    }
+
+    if (isOfferExpired(found)) {
+      setAppliedPromo(null);
+      setPromoMessage(
+        language === 'hi'
+          ? `यह कूपन ${found.expiryDate} को समाप्त हो चुका है`
+          : `This coupon expired on ${found.expiryDate}.`
+      );
+      playAlertChime();
+      return;
+    }
+
+    if (found.minOrderAmount && cartSubtotal < Number(found.minOrderAmount)) {
+      setAppliedPromo(null);
+      setPromoMessage(
+        language === 'hi'
+          ? `न्यूनतम ऑर्डर मूल्य ₹${found.minOrderAmount} आवश्यक है (वर्तमान ट्रे: ₹${cartSubtotal.toFixed(0)})`
+          : `Minimum order of ₹${found.minOrderAmount} required (Current tray: ₹${cartSubtotal.toFixed(0)}).`
+      );
+      playAlertChime();
+      return;
+    }
+
+    setAppliedPromo(found);
+    setPromoInput(found.code);
+    const discPreview =
+      found.type === 'percent'
+        ? `${found.value}% Off (Save ₹${((cartSubtotal * found.value) / 100).toFixed(0)})`
+        : `Flat ₹${found.value} Off`;
+    setPromoMessage(
+      language === 'hi'
+        ? `✓ लागू हुआ: ${found.code} (${discPreview})`
+        : `✓ Applied: ${found.code} (${discPreview})`
+    );
+    playSuccessChime();
+  };
+
+  const handleRemovePromo = () => {
+    playTapSound();
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoMessage(language === 'hi' ? 'कूपन हटा दिया गया' : 'Coupon removed.');
   };
 
   const handleCheckoutSubmit = (e) => {
@@ -265,6 +354,7 @@ export default function CustomerView({
       subtotal: cartSubtotal,
       tax: tax,
       discount: discountAmount,
+      appliedPromoCode: appliedPromo ? appliedPromo.code : null,
       total: cartTotal,
       progressPercent: 20
     };
@@ -276,6 +366,9 @@ export default function CustomerView({
     broadcastSyncEvent(SYNC_EVENTS.NEW_ORDER, newOrder);
 
     setCart([]);
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoMessage('');
     setIsCartOpen(false);
     setShowUpiModal(false);
     playSuccessChime();
@@ -949,25 +1042,152 @@ export default function CustomerView({
             </div>
 
             {/* Coupon Code (FR-P5) */}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                {t('couponCode')}
-              </label>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Tag size={13} color="#007AFF" />
+                  <span>{t('couponCode')}</span>
+                </label>
+                {appliedPromo && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#16A34A' }}>
+                    Saving ₹{discountAmount.toFixed(0)}!
+                  </span>
+                )}
+              </div>
+
+              {/* Coupon Input & Apply/Remove Buttons */}
               <div style={{ display: 'flex', gap: 6 }}>
                 <input
                   type="text"
                   className="ios-input"
                   placeholder={t('couponPlaceholder')}
                   value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyPromo();
+                    }
+                  }}
+                  style={{
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    fontWeight: 700,
+                    borderColor: appliedPromo ? '#86EFAC' : '#E5E7EB',
+                    background: appliedPromo ? '#F0FDF4' : '#FFFFFF'
+                  }}
                 />
-                <button className="btn-secondary-pill" onClick={handleApplyPromo}>
-                  {t('apply')}
-                </button>
+                {appliedPromo ? (
+                  <button
+                    type="button"
+                    className="btn-secondary-pill"
+                    onClick={handleRemovePromo}
+                    style={{
+                      padding: '8px 12px',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: '#DC2626',
+                      borderColor: '#FECACA',
+                      background: '#FEF2F2'
+                    }}
+                  >
+                    ✕ Remove
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-secondary-pill"
+                    onClick={() => handleApplyPromo()}
+                    style={{ minWidth: 70, justifyContent: 'center', fontWeight: 700 }}
+                  >
+                    {t('apply')}
+                  </button>
+                )}
               </div>
+
               {promoMessage && (
-                <div style={{ fontSize: 11, marginTop: 4, color: appliedPromo ? '#16A34A' : '#EF4444' }}>
-                  {promoMessage}
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    marginTop: 6,
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    background: appliedPromo ? '#DCFCE7' : '#FEE2E2',
+                    color: appliedPromo ? '#15803D' : '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                >
+                  {appliedPromo ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+                  <span>{promoMessage}</span>
+                </div>
+              )}
+
+              {/* Available Coupons Carousel (1-Tap Apply) */}
+              {offers && offers.filter((o) => o.isActive && !isOfferExpired(o)).length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 6 }}>
+                    {language === 'hi' ? 'उपलब्ध ऑफर्स (टैप करके लागू करें):' : 'Available Offers (Tap to Apply):'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 6 }}>
+                    {offers
+                      .filter((o) => o.isActive && !isOfferExpired(o))
+                      .map((off) => {
+                        const isCurrent = appliedPromo && appliedPromo.code === off.code;
+                        const isEligible = !off.minOrderAmount || cartSubtotal >= Number(off.minOrderAmount);
+                        return (
+                          <div
+                            key={off.id}
+                            onClick={() => {
+                              if (isCurrent) {
+                                handleRemovePromo();
+                              } else {
+                                handleApplyPromo(off.code);
+                              }
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              background: isCurrent ? '#F0FDF4' : '#F8FAFC',
+                              border: `1.5px dashed ${isCurrent ? '#16A34A' : isEligible ? '#007AFF' : '#CBD5E1'}`,
+                              borderRadius: 12,
+                              padding: '8px 10px',
+                              cursor: 'pointer',
+                              minWidth: 165,
+                              maxWidth: 220,
+                              transition: 'all 0.2s ease',
+                              boxShadow: isCurrent ? '0 2px 6px rgba(22, 163, 74, 0.15)' : 'none'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: isCurrent ? '#15803D' : '#007AFF', letterSpacing: '0.04em' }}>
+                                {off.code}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: '2px 6px',
+                                  borderRadius: 8,
+                                  background: isCurrent ? '#DCFCE7' : '#EFF6FF',
+                                  color: isCurrent ? '#15803D' : '#007AFF'
+                                }}
+                              >
+                                {isCurrent ? '✓ Applied' : off.type === 'percent' ? `${off.value}% OFF` : `₹${off.value} OFF`}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#4B5563', lineHeight: 1.3, marginBottom: 4 }}>
+                              {off.description}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#6B7280', display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{off.minOrderAmount > 0 ? `Min ₹${off.minOrderAmount}` : 'No Min'}</span>
+                              {off.expiryDate && <span>Till {off.expiryDate}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               )}
             </div>

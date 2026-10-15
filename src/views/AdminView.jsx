@@ -24,7 +24,13 @@ import {
   Crown,
   FileCode,
   Send,
-  QrCode
+  QrCode,
+  Tag,
+  Percent,
+  Copy,
+  Check,
+  AlertTriangle,
+  CalendarX
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import BankReconciliationView from './BankReconciliationView';
@@ -34,6 +40,7 @@ import AggregatorReconciliationView from './AggregatorReconciliationView';
 import MultiBranchView from './MultiBranchView';
 import { exportToTallyPrimeXml, exportToZohoBooksCsv } from '../utils/accountingExport';
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
+import { STORAGE_KEYS, saveData } from '../utils/storage';
 
 export default function AdminView({
   orders,
@@ -47,6 +54,8 @@ export default function AdminView({
   setTheme,
   chef,
   checklists,
+  offers = [],
+  setOffers,
   activeAdminTab: externalActiveAdminTab,
   setActiveAdminTab: externalSetActiveAdminTab,
   onOpenTableQr
@@ -57,6 +66,23 @@ export default function AdminView({
   const [orderSearch, setOrderSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [payrollDisbursed, setPayrollDisbursed] = useState(false);
+
+  // Coupons & Offers Management State
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponFilter, setCouponFilter] = useState('all'); // 'all' | 'active' | 'expired' | 'inactive'
+  const [copiedCouponId, setCopiedCouponId] = useState(null);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    type: 'percent',
+    value: '',
+    minOrderAmount: '',
+    maxDiscount: '',
+    expiryDate: '',
+    description: '',
+    isActive: true
+  });
 
   // Expense Logger Form State
   const [expCategory, setExpCategory] = useState('Ingredients & Produce');
@@ -293,6 +319,135 @@ export default function AdminView({
     playSuccessChime();
   };
 
+  // Coupons & Offers Helpers
+  const isOfferExpired = (offer) => {
+    if (!offer || !offer.expiryDate) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return offer.expiryDate < today;
+  };
+
+  const handleOpenCreateCoupon = () => {
+    playTapSound();
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    const defaultExpiry = d.toISOString().slice(0, 10);
+
+    setEditingCoupon(null);
+    setCouponForm({
+      code: '',
+      type: 'percent',
+      value: '',
+      minOrderAmount: '',
+      maxDiscount: '',
+      expiryDate: defaultExpiry,
+      description: '',
+      isActive: true
+    });
+    setShowCouponModal(true);
+  };
+
+  const handleOpenEditCoupon = (offer) => {
+    playTapSound();
+    setEditingCoupon(offer);
+    setCouponForm({
+      code: offer.code,
+      type: offer.type || 'percent',
+      value: offer.value.toString(),
+      minOrderAmount: offer.minOrderAmount ? offer.minOrderAmount.toString() : '',
+      maxDiscount: offer.maxDiscount ? offer.maxDiscount.toString() : '',
+      expiryDate: offer.expiryDate || '',
+      description: offer.description || '',
+      isActive: offer.isActive !== undefined ? offer.isActive : true
+    });
+    setShowCouponModal(true);
+  };
+
+  const handleSaveCoupon = (e) => {
+    if (e) e.preventDefault();
+    const cleanCode = couponForm.code.trim().toUpperCase();
+    if (!cleanCode) {
+      alert('Please enter a coupon code.');
+      return;
+    }
+    const numVal = parseFloat(couponForm.value);
+    if (isNaN(numVal) || numVal <= 0) {
+      alert('Please enter a valid discount value greater than 0.');
+      return;
+    }
+
+    const offerData = {
+      id: editingCoupon ? editingCoupon.id : `off-${Date.now()}`,
+      code: cleanCode,
+      type: couponForm.type,
+      value: numVal,
+      minOrderAmount: couponForm.minOrderAmount ? parseFloat(couponForm.minOrderAmount) : 0,
+      maxDiscount: couponForm.maxDiscount ? parseFloat(couponForm.maxDiscount) : null,
+      expiryDate: couponForm.expiryDate || null,
+      description: couponForm.description.trim() || `${numVal}${couponForm.type === 'percent' ? '%' : '₹'} Off Promo`,
+      isActive: couponForm.isActive,
+      updatedAt: new Date().toISOString()
+    };
+
+    let updatedOffers;
+    if (editingCoupon) {
+      updatedOffers = offers.map((o) => (o.id === editingCoupon.id ? offerData : o));
+    } else {
+      updatedOffers = [offerData, ...offers];
+    }
+
+    if (setOffers) setOffers(updatedOffers);
+    saveData(STORAGE_KEYS.OFFERS, updatedOffers);
+    broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updatedOffers);
+    playSuccessChime();
+    setShowCouponModal(false);
+  };
+
+  const handleDeleteCoupon = (coupon) => {
+    playTapSound();
+    const isExpired = isOfferExpired(coupon);
+    const confirmMsg = isExpired
+      ? `Delete expired coupon "${coupon.code}"?`
+      : `Are you sure you want to delete coupon "${coupon.code}"?`;
+    if (window.confirm(confirmMsg)) {
+      const updated = offers.filter((o) => o.id !== coupon.id);
+      if (setOffers) setOffers(updated);
+      saveData(STORAGE_KEYS.OFFERS, updated);
+      broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
+      playAlertChime();
+    }
+  };
+
+  const handleDeleteAllExpiredCoupons = () => {
+    playTapSound();
+    const expiredList = offers.filter((o) => isOfferExpired(o));
+    if (expiredList.length === 0) return;
+    if (window.confirm(`Delete all ${expiredList.length} expired coupon(s)?`)) {
+      const updated = offers.filter((o) => !isOfferExpired(o));
+      if (setOffers) setOffers(updated);
+      saveData(STORAGE_KEYS.OFFERS, updated);
+      broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
+      playSuccessChime();
+    }
+  };
+
+  const handleToggleCouponActive = (coupon) => {
+    playTapSound();
+    const updated = offers.map((o) =>
+      o.id === coupon.id ? { ...o, isActive: !o.isActive } : o
+    );
+    if (setOffers) setOffers(updated);
+    saveData(STORAGE_KEYS.OFFERS, updated);
+    broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
+  };
+
+  const handleCopyCouponCode = (code, id) => {
+    playTapSound();
+    navigator.clipboard.writeText(code);
+    setCopiedCouponId(id);
+    playSuccessChime();
+    setTimeout(() => setCopiedCouponId(null), 2000);
+  };
+
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 85 }}>
       {/* Title */}
@@ -307,6 +462,7 @@ export default function AdminView({
           { id: 'sales', label: 'Sales Dashboard', inFooter: true },
           { id: 'orders', label: 'Orders & CSV', inFooter: true },
           { id: 'pnl', label: 'P&L & Cash Check', inFooter: true },
+          { id: 'offers', label: 'Coupons & Offers', inFooter: true },
           { id: 'bank-rec', label: 'Bank CSV Rec', inFooter: false },
           { id: 'payroll', label: 'Staff Payroll', inFooter: true },
           { id: 'inventory', label: 'Inventory & Wastage', inFooter: false },
@@ -841,6 +997,320 @@ export default function AdminView({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 3B. DISCOUNTS, COUPONS & PROMO OFFERS ENGINE */}
+      {activeAdminTab === 'offers' && (
+        <div>
+          {/* Header & KPI Summary */}
+          <div className="ios-card" style={{ marginBottom: 16 }}>
+            <div className="card-top-row" style={{ flexWrap: 'wrap', gap: 10 }}>
+              <div className="card-title-group">
+                <span className="card-heading" style={{ fontSize: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Tag size={18} color="#007AFF" />
+                  <span>Promo Coupons & Customer Discounts</span>
+                </span>
+                <span className="card-meta-text">
+                  Create, edit, track expiry dates and delete coupons across table QR ordering
+                </span>
+              </div>
+              <button
+                className="btn-primary-pill"
+                onClick={handleOpenCreateCoupon}
+                style={{ padding: '8px 16px', fontSize: 13 }}
+              >
+                <Plus size={15} />
+                <span>Create New Coupon</span>
+              </button>
+            </div>
+
+            {/* Quick KPI Stat Pills */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10, marginTop: 14 }}>
+              <div style={{ background: '#F8FAFC', borderRadius: 12, padding: '10px 12px', border: '1px solid #E2E8F0' }}>
+                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>Total Coupons</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#0F172A', marginTop: 2 }}>{offers.length}</div>
+              </div>
+
+              <div style={{ background: '#F0FDF4', borderRadius: 12, padding: '10px 12px', border: '1px solid #BBF7D0' }}>
+                <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>Active Deals</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#15803D', marginTop: 2 }}>
+                  {offers.filter((o) => o.isActive && !isOfferExpired(o)).length}
+                </div>
+              </div>
+
+              <div style={{ background: '#FEF2F2', borderRadius: 12, padding: '10px 12px', border: '1px solid #FECACA' }}>
+                <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Expired</span>
+                  {offers.filter((o) => isOfferExpired(o)).length > 0 && (
+                    <button
+                      onClick={handleDeleteAllExpiredCoupons}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#B91C1C',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                      title="Delete all expired coupons at once"
+                    >
+                      Delete All
+                    </button>
+                  )}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#B91C1C', marginTop: 2 }}>
+                  {offers.filter((o) => isOfferExpired(o)).length}
+                </div>
+              </div>
+
+              <div style={{ background: '#EFF6FF', borderRadius: 12, padding: '10px 12px', border: '1px solid #BFDBFE' }}>
+                <div style={{ fontSize: 11, color: '#2563EB', fontWeight: 600 }}>Orders Discounted</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#1D4ED8', marginTop: 2 }}>
+                  {orders.filter((o) => o.discount && o.discount > 0).length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter & Search Controls */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { id: 'all', label: `All (${offers.length})` },
+                { id: 'active', label: `Active (${offers.filter((o) => o.isActive && !isOfferExpired(o)).length})` },
+                { id: 'expired', label: `Expired (${offers.filter((o) => isOfferExpired(o)).length})` },
+                { id: 'inactive', label: `Disabled (${offers.filter((o) => !o.isActive && !isOfferExpired(o)).length})` }
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  className={`capsule-tab ${couponFilter === f.id ? 'active' : ''}`}
+                  style={{ fontSize: 12, padding: '5px 12px' }}
+                  onClick={() => {
+                    playTapSound();
+                    setCouponFilter(f.id);
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search by code or description..."
+              className="ios-input"
+              value={couponSearch}
+              onChange={(e) => setCouponSearch(e.target.value)}
+              style={{ maxWidth: 260, fontSize: 12, padding: '6px 12px' }}
+            />
+          </div>
+
+          {/* Coupon Cards Grid */}
+          {(() => {
+            const filteredCoupons = offers.filter((off) => {
+              const expired = isOfferExpired(off);
+              if (couponFilter === 'active' && (!off.isActive || expired)) return false;
+              if (couponFilter === 'expired' && !expired) return false;
+              if (couponFilter === 'inactive' && (off.isActive || expired)) return false;
+
+              if (couponSearch.trim()) {
+                const q = couponSearch.toLowerCase().trim();
+                const matchCode = off.code.toLowerCase().includes(q);
+                const matchDesc = off.description && off.description.toLowerCase().includes(q);
+                return matchCode || matchDesc;
+              }
+              return true;
+            });
+
+            if (filteredCoupons.length === 0) {
+              return (
+                <div style={{ textAlign: 'center', padding: '50px 20px', background: '#F9FAFB', borderRadius: 16, border: '1px dashed #D1D5DB' }}>
+                  <Tag size={36} color="#9CA3AF" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#374151' }}>No Coupons Found</div>
+                  <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, marginBottom: 14 }}>
+                    {couponSearch
+                      ? `No coupon matches "${couponSearch}".`
+                      : couponFilter === 'expired'
+                      ? 'No expired coupons! All active coupons are running smoothly.'
+                      : 'Create your first discount coupon code to delight diners.'}
+                  </div>
+                  <button className="btn-primary-pill" onClick={handleOpenCreateCoupon}>
+                    <Plus size={14} />
+                    <span>Create New Coupon</span>
+                  </button>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12, marginBottom: 20 }}>
+                {filteredCoupons.map((off) => {
+                  const expired = isOfferExpired(off);
+                  return (
+                    <div
+                      key={off.id}
+                      className="ios-card"
+                      style={{
+                        padding: '14px',
+                        border: expired
+                          ? '1.5px solid #FECACA'
+                          : off.isActive
+                          ? '1.5px solid #BBF7D0'
+                          : '1px solid #E5E7EB',
+                        background: expired ? '#FEF2F2' : '#FFFFFF',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: 12
+                      }}
+                    >
+                      {/* Top: Code & Status */}
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              style={{
+                                fontFamily: 'monospace',
+                                fontSize: 16,
+                                fontWeight: 800,
+                                background: expired ? '#FEE2E2' : '#EFF6FF',
+                                color: expired ? '#991B1B' : '#007AFF',
+                                padding: '4px 8px',
+                                borderRadius: 8,
+                                letterSpacing: '0.04em'
+                              }}
+                            >
+                              {off.code}
+                            </span>
+                            <button
+                              onClick={() => handleCopyCouponCode(off.code, off.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: 4,
+                                color: copiedCouponId === off.id ? '#16A34A' : '#9CA3AF'
+                              }}
+                              title="Copy coupon code"
+                            >
+                              {copiedCouponId === off.id ? <Check size={14} /> : <Copy size={14} />}
+                            </button>
+                          </div>
+
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              padding: '3px 8px',
+                              borderRadius: 12,
+                              background: expired ? '#FEE2E2' : off.isActive ? '#DCFCE7' : '#F3F4F6',
+                              color: expired ? '#DC2626' : off.isActive ? '#15803D' : '#6B7280',
+                              border: `1px solid ${expired ? '#FCA5A5' : off.isActive ? '#86EFAC' : '#E5E7EB'}`
+                            }}
+                          >
+                            {expired ? '🔴 Expired' : off.isActive ? '🟢 Active' : '⚪ Paused'}
+                          </span>
+                        </div>
+
+                        {/* Discount Value */}
+                        <div style={{ fontSize: 20, fontWeight: 800, color: expired ? '#6B7280' : '#111827', marginBottom: 4 }}>
+                          {off.type === 'percent' ? `${off.value}% OFF` : `₹${off.value} FLAT OFF`}
+                        </div>
+
+                        {/* Description */}
+                        <div style={{ fontSize: 12.5, color: '#4B5563', lineHeight: 1.4, marginBottom: 8 }}>
+                          {off.description || 'Artisanal dining discount offer.'}
+                        </div>
+
+                        {/* Rules / Constraints */}
+                        <div style={{ fontSize: 11, color: '#6B7280', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div>
+                            • Min Order:{' '}
+                            <strong style={{ color: '#374151' }}>
+                              {off.minOrderAmount > 0 ? `₹${off.minOrderAmount}` : 'No Minimum'}
+                            </strong>
+                          </div>
+                          <div>
+                            • Validity:{' '}
+                            <strong style={{ color: expired ? '#DC2626' : '#374151' }}>
+                              {off.expiryDate ? `Until ${off.expiryDate}` : 'Lifetime / No Expiry'}
+                            </strong>
+                          </div>
+                          {off.type === 'percent' && off.maxDiscount && (
+                            <div>
+                              • Max Discount: <strong>₹{off.maxDiscount}</strong>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Bottom Actions */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          borderTop: '1px solid #E5E7EB',
+                          paddingTop: 10
+                        }}
+                      >
+                        {/* Toggle Active Switch */}
+                        <button
+                          className="btn-secondary-pill"
+                          style={{
+                            padding: '4px 10px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: off.isActive ? '#D97706' : '#16A34A',
+                            borderColor: off.isActive ? '#FDE68A' : '#BBF7D0'
+                          }}
+                          onClick={() => handleToggleCouponActive(off)}
+                          title={off.isActive ? 'Pause coupon' : 'Activate coupon'}
+                        >
+                          {off.isActive ? 'Pause' : 'Activate'}
+                        </button>
+
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {/* Edit Button */}
+                          <button
+                            className="btn-secondary-pill"
+                            style={{ padding: '4px 10px', fontSize: 11, gap: 4 }}
+                            onClick={() => handleOpenEditCoupon(off)}
+                            title="Edit coupon details"
+                          >
+                            <Edit2 size={12} />
+                            <span>Edit</span>
+                          </button>
+
+                          {/* Delete Button */}
+                          <button
+                            className="btn-secondary-pill"
+                            style={{
+                              padding: '4px 10px',
+                              fontSize: 11,
+                              gap: 4,
+                              color: '#DC2626',
+                              borderColor: expired ? '#F87171' : '#FECACA',
+                              background: expired ? '#FEE2E2' : '#FFFFFF',
+                              fontWeight: expired ? 700 : 500
+                            }}
+                            onClick={() => handleDeleteCoupon(off)}
+                            title={expired ? 'Delete expired coupon' : 'Delete coupon'}
+                          >
+                            <Trash2 size={12} />
+                            <span>{expired ? 'Delete Expired' : 'Delete'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -1455,6 +1925,168 @@ export default function AdminView({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT COUPON MODAL */}
+      {showCouponModal && (
+        <div className="modal-overlay" onClick={() => setShowCouponModal(false)} style={{ zIndex: 9999 }}>
+          <div
+            className="modal-content-sheet"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 480, width: '92%', borderRadius: 20, padding: 20 }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Tag size={18} color="#007AFF" />
+                <span className="card-heading" style={{ fontSize: 17 }}>
+                  {editingCoupon ? `Edit Coupon: ${editingCoupon.code}` : 'Create New Promo Coupon'}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowCouponModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Coupon Code *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. ADVAIT25"
+                    className="ios-input"
+                    value={couponForm.code}
+                    onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                    style={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Discount Type *
+                  </label>
+                  <select
+                    className="ios-select"
+                    value={couponForm.type}
+                    onChange={(e) => setCouponForm({ ...couponForm, type: e.target.value })}
+                  >
+                    <option value="percent">Percentage (%) Off</option>
+                    <option value="flat">Flat Amount (₹) Off</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Discount Value * {couponForm.type === 'percent' ? '(%)' : '(₹)'}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="1"
+                    placeholder={couponForm.type === 'percent' ? 'e.g. 15' : 'e.g. 100'}
+                    className="ios-input"
+                    value={couponForm.value}
+                    onChange={(e) => setCouponForm({ ...couponForm, value: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Minimum Order (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="10"
+                    placeholder="e.g. 500 (0 for none)"
+                    className="ios-input"
+                    value={couponForm.minOrderAmount}
+                    onChange={(e) => setCouponForm({ ...couponForm, minOrderAmount: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Expiry Date
+                  </label>
+                  <input
+                    type="date"
+                    className="ios-input"
+                    value={couponForm.expiryDate}
+                    onChange={(e) => setCouponForm({ ...couponForm, expiryDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                    Max Discount Cap (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 250 (Optional)"
+                    className="ios-input"
+                    value={couponForm.maxDiscount}
+                    onChange={(e) => setCouponForm({ ...couponForm, maxDiscount: e.target.value })}
+                    disabled={couponForm.type !== 'percent'}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 4 }}>
+                  Description / Campaign Note
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 15% Off on Dinner & Craft Beverages"
+                  className="ios-input"
+                  value={couponForm.description}
+                  onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                <input
+                  type="checkbox"
+                  id="couponIsActiveCheck"
+                  checked={couponForm.isActive}
+                  onChange={(e) => setCouponForm({ ...couponForm, isActive: e.target.checked })}
+                  style={{ width: 16, height: 16, accentColor: '#007AFF' }}
+                />
+                <label htmlFor="couponIsActiveCheck" style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  Enable and activate this coupon immediately
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" className="btn-primary-pill full-width" style={{ padding: '10px' }}>
+                  <CheckCircle2 size={16} />
+                  <span>{editingCoupon ? 'Update Coupon' : 'Publish Coupon'}</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary-pill"
+                  onClick={() => setShowCouponModal(false)}
+                  style={{ padding: '10px 16px' }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

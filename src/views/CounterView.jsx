@@ -22,12 +22,14 @@ import {
   Send,
   Sparkles,
   Bell,
-  Utensils
+  Utensils,
+  Trash2
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import PrinterModal from '../components/PrinterModal';
 import WhatsAppAlertModal from '../components/WhatsAppAlertModal';
 import { broadcastSyncEvent, SYNC_EVENTS, subscribeSyncEvents } from '../utils/sync';
+import { STORAGE_KEYS, saveData } from '../utils/storage';
 
 export default function CounterView({
   orders,
@@ -74,6 +76,8 @@ export default function CounterView({
   const [newOfferCode, setNewOfferCode] = useState('');
   const [newOfferType, setNewOfferType] = useState('percent');
   const [newOfferValue, setNewOfferValue] = useState('');
+  const [newOfferMin, setNewOfferMin] = useState('');
+  const [newOfferExpiry, setNewOfferExpiry] = useState('');
   const [newOfferDesc, setNewOfferDesc] = useState('');
 
   // Suggestables Configuration (FR-P6)
@@ -209,17 +213,33 @@ export default function CounterView({
       code: newOfferCode.trim().toUpperCase(),
       type: newOfferType,
       value: parseFloat(newOfferValue),
-      description: newOfferDesc || `${newOfferValue}% Off Offer`,
+      minOrderAmount: newOfferMin ? parseFloat(newOfferMin) : 0,
+      expiryDate: newOfferExpiry || null,
+      description: newOfferDesc || `${newOfferValue}${newOfferType === 'percent' ? '%' : '₹'} Off Promo`,
       isActive: true
     };
 
     const updated = [offerObj, ...offers];
     setOffers(updated);
+    saveData(STORAGE_KEYS.OFFERS, updated);
     broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
     setNewOfferCode('');
     setNewOfferValue('');
+    setNewOfferMin('');
+    setNewOfferExpiry('');
     setNewOfferDesc('');
     playSuccessChime();
+  };
+
+  const handleDeleteOffer = (offerId) => {
+    playTapSound();
+    if (window.confirm('Are you sure you want to delete this coupon?')) {
+      const updated = offers.filter((o) => o.id !== offerId);
+      setOffers(updated);
+      saveData(STORAGE_KEYS.OFFERS, updated);
+      broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
+      playAlertChime();
+    }
   };
 
   // Manual Punch In Submit (FR-P7)
@@ -957,6 +977,29 @@ export default function CounterView({
                 </div>
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Min Order (₹)</label>
+                  <input
+                    type="number"
+                    step="10"
+                    className="ios-input"
+                    placeholder="e.g. 500 (0 for none)"
+                    value={newOfferMin}
+                    onChange={(e) => setNewOfferMin(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Expiry Date</label>
+                  <input
+                    type="date"
+                    className="ios-input"
+                    value={newOfferExpiry}
+                    onChange={(e) => setNewOfferExpiry(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, marginBottom: 12 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Value</label>
@@ -981,11 +1024,77 @@ export default function CounterView({
                 </div>
               </div>
 
-              <button type="submit" className="btn-primary-pill full-width">
+              <button type="submit" className="btn-primary-pill full-width" style={{ marginBottom: 16 }}>
                 <Tag size={15} />
                 <span>Publish New Offer</span>
               </button>
             </form>
+
+            {/* Existing Offers List */}
+            <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                Current Coupons & Deals ({offers.length})
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {offers.map((off) => {
+                  const today = new Date().toISOString().slice(0, 10);
+                  const isExpired = off.expiryDate && off.expiryDate < today;
+                  return (
+                    <div
+                      key={off.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        background: isExpired ? '#FEF2F2' : '#F9FAFB',
+                        borderRadius: 12,
+                        border: `1px solid ${isExpired ? '#FECACA' : '#E5E7EB'}`
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 800, fontFamily: 'monospace', color: isExpired ? '#991B1B' : '#007AFF' }}>
+                            {off.code}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: 6,
+                              background: isExpired ? '#FEE2E2' : '#DCFCE7',
+                              color: isExpired ? '#DC2626' : '#15803D'
+                            }}
+                          >
+                            {isExpired ? 'Expired' : off.type === 'percent' ? `${off.value}% OFF` : `₹${off.value} OFF`}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#4B5563', marginTop: 2 }}>{off.description}</div>
+                        <div style={{ fontSize: 10, color: '#6B7280', marginTop: 1 }}>
+                          {off.minOrderAmount > 0 && `Min ₹${off.minOrderAmount} • `}
+                          {off.expiryDate ? `Expires ${off.expiryDate}` : 'No Expiry'}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteOffer(off.id)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#DC2626',
+                          cursor: 'pointer',
+                          padding: 6
+                        }}
+                        title="Delete coupon"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -13,7 +13,8 @@ import {
   DollarSign,
   Users,
   Palette,
-  Monitor
+  Monitor,
+  Tag
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
 import { canKdsReturnToAdmin, canKdsReturnToCounter } from '../utils/auth';
@@ -91,10 +92,10 @@ export default function BottomNav({
       // Owner Admin
       return [
         { id: 'sales', label: 'Sales', icon: BarChart3 },
-        { id: 'orders', label: 'Order & CSV', icon: Receipt },
+        { id: 'orders', label: 'Orders', icon: Receipt },
+        { id: 'offers', label: 'Coupons', icon: Tag },
         { id: 'pnl', label: 'P&L Cash', icon: DollarSign },
-        { id: 'payroll', label: 'Payroll', icon: Users },
-        { id: 'branding', label: 'Branding', icon: Palette }
+        { id: 'payroll', label: 'Payroll', icon: Users }
       ];
     }
   };

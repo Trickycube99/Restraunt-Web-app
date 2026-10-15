@@ -433,6 +433,8 @@ export default function App() {
               setTheme={setTheme}
               chef={chef}
               checklists={checklists}
+              offers={offers}
+              setOffers={setOffers}
               activeAdminTab={adminTab}
               setActiveAdminTab={setAdminTab}
               onOpenTableQr={() => setIsTableQrOpen(true)}

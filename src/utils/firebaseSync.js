@@ -299,3 +299,48 @@ export function subscribeToCloudOrders(onOrdersUpdated, onStatusUpdated) {
     return () => {};
   }
 }
+
+/**
+ * Sync coupons & offers to Firebase Firestore (Cross-Device)
+ */
+export async function syncOffersToCloud(offers) {
+  const database = initFirebase();
+  if (!database || !Array.isArray(offers)) return false;
+
+  try {
+    const configDocRef = doc(database, 'restaurant_config', 'offers');
+    await setDoc(configDocRef, {
+      offers: sanitizeForFirestore(offers),
+      _cloudSyncedAt: Date.now()
+    }, { merge: true });
+    return true;
+  } catch (err) {
+    console.error('🔥 [Cloud Sync] Error uploading offers to Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to coupons & offers updates across devices
+ */
+export function subscribeToCloudOffers(onOffersUpdated) {
+  const database = initFirebase();
+  if (!database) return () => {};
+
+  try {
+    const configDocRef = doc(database, 'restaurant_config', 'offers');
+    let isInitial = true;
+    const unsubscribe = onSnapshot(configDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && Array.isArray(data.offers)) {
+          if (onOffersUpdated) onOffersUpdated(data.offers, isInitial);
+        }
+      }
+      isInitial = false;
+    });
+    return unsubscribe;
+  } catch (err) {
+    return () => {};
+  }
+}
