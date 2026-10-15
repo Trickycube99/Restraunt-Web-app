@@ -136,12 +136,13 @@ export default function App() {
       }
 
       if (targetRole) {
-        if (targetRole === 'customer' || isAuthenticated(targetRole)) {
+        if (targetRole === 'customer' || isAuthenticated(targetRole, currentRole)) {
           setCurrentRole(targetRole);
           if (targetRole === 'customer') setActiveTab('menu');
           else if (targetRole === 'chef') setActiveTab('chef');
           else if (targetRole === 'counter') { setActiveTab('orders'); setCounterSubTab('orders'); }
           else if (targetRole === 'kds') setActiveTab('kds');
+          else if (targetRole === 'admin') setActiveTab('sales');
         } else {
           // Open workstation authentication gate
           setAuthModal({ isOpen: true, targetRole });
@@ -156,7 +157,7 @@ export default function App() {
       window.removeEventListener('hashchange', syncFromUrl);
       window.removeEventListener('popstate', syncFromUrl);
     };
-  }, []);
+  }, [currentRole]);
 
   // Active in-progress orders count
   const activeOrdersCount = orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length;
@@ -196,10 +197,24 @@ export default function App() {
     }
   };
 
-  // Switch role helper with Authentication Verification
+  // Switch role helper with Authentication Verification & Hierarchy Enforcement
   const handleRoleSwitch = (role) => {
     playTapSound();
-    if (role !== 'customer' && !isAuthenticated(role)) {
+
+    // 1. Kitchen CANNOT switch or log in to admin or counter
+    if (currentRole === 'kds' && (role === 'admin' || role === 'counter')) {
+      alert('Access Denied: Kitchen staff cannot access Counter POS or Admin Back-Office.');
+      return;
+    }
+
+    // 2. Counter can ONLY log in to counter and kitchen (CANNOT access admin)
+    if (currentRole === 'counter' && role === 'admin' && !isAuthenticated('admin')) {
+      setAuthModal({ isOpen: true, targetRole: 'admin' });
+      return;
+    }
+
+    // Check authentication with role hierarchy
+    if (role !== 'customer' && !isAuthenticated(role, currentRole)) {
       setAuthModal({ isOpen: true, targetRole: role });
       return;
     }
@@ -215,6 +230,8 @@ export default function App() {
       setCounterSubTab('orders');
     } else if (role === 'kds') {
       setActiveTab('kds');
+    } else if (role === 'admin') {
+      setActiveTab('sales');
     }
   };
 
@@ -238,6 +255,8 @@ export default function App() {
       setCounterSubTab('orders');
     } else if (role === 'kds') {
       setActiveTab('kds');
+    } else if (role === 'admin') {
+      setActiveTab('sales');
     }
   };
 
@@ -403,8 +422,8 @@ export default function App() {
           } else if (currentRole === 'counter') {
             setCounterSubTab(tabId);
           } else if (currentRole === 'kds') {
-            if (tabId === 'counter') {
-              handleRoleSwitch('counter');
+            if (tabId === 'kds') {
+              setActiveTab('kds');
             }
           } else if (currentRole === 'admin') {
             setAdminTab(tabId);
@@ -419,6 +438,7 @@ export default function App() {
       <AuthModal
         isOpen={authModal.isOpen}
         targetRole={authModal.targetRole}
+        activeSessionRole={currentRole}
         onSuccess={handleAuthSuccess}
         onClose={() => setAuthModal({ isOpen: false, targetRole: null })}
         theme={theme}

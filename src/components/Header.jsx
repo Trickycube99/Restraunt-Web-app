@@ -296,49 +296,161 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center: Workstation Switching (Only accessible inside staff session) */}
+        {/* Center: Workstation Switching (Enforces Role Hierarchy: Admin -> All, Counter -> KDS only, Kitchen -> Locked) */}
         <nav className="header-center-nav staff-center-nav">
-          <button
-            className={`nav-role-pill ${currentRole === 'counter' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('counter')}
-            title="Live Counter POS Queue & Cash Check"
-          >
-            <Layers size={14} />
-            <span>Live POS</span>
-            {activeOrdersCount > 0 && (
-              <span className="nav-badge-pill">{activeOrdersCount}</span>
-            )}
-          </button>
+          {/* Admin has Master Access across all stations */}
+          {currentRole === 'admin' && (
+            <>
+              <button
+                className="nav-role-pill active"
+                onClick={() => onRoleSwitch('admin')}
+                title="Sales, Finance, P&L & Checklists"
+              >
+                <BarChart3 size={14} />
+                <span>Owner Admin</span>
+              </button>
 
-          <button
-            className={`nav-role-pill ${currentRole === 'kds' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('kds')}
-            title="Kitchen Display Screen"
-          >
-            <Monitor size={14} color={currentRole === 'kds' ? '#FFFFFF' : '#38BDF8'} />
-            <span>Kitchen KDS</span>
-            {activeOrdersCount > 0 && (
-              <span className="nav-badge-pill kds">{activeOrdersCount}</span>
-            )}
-          </button>
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('counter')}
+                title="Admin Switching to Live Counter POS"
+              >
+                <Layers size={14} />
+                <span>Live POS</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill">{activeOrdersCount}</span>
+                )}
+              </button>
 
-          <button
-            className={`nav-role-pill ${currentRole === 'admin' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('admin')}
-            title="Sales, Finance, P&L & Checklists"
-          >
-            <BarChart3 size={14} />
-            <span>Owner Admin</span>
-          </button>
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('kds')}
+                title="Admin Switching to Kitchen KDS Screen"
+              >
+                <Monitor size={14} color="#38BDF8" />
+                <span>Kitchen KDS</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
+                )}
+              </button>
 
-          <button
-            className={`nav-role-pill ${currentRole === 'chef' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('chef')}
-            title="Chef Credentials & Recipe Spec"
-          >
-            <ShieldCheck size={14} color={currentRole === 'chef' ? '#FFFFFF' : '#007AFF'} />
-            <span>Chef Page</span>
-          </button>
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('chef')}
+                title="Chef Credentials & Recipe Spec"
+              >
+                <ShieldCheck size={14} color="#007AFF" />
+                <span>Chef Page</span>
+              </button>
+            </>
+          )}
+
+          {/* Counterperson: Can access Counter and ONLY Kitchen (Admin is strictly hidden) */}
+          {currentRole === 'counter' && (
+            <>
+              <button
+                className="nav-role-pill active"
+                onClick={() => onRoleSwitch('counter')}
+                title="Live Counter POS Queue & Cash Check"
+              >
+                <Layers size={14} />
+                <span>Live POS</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill">{activeOrdersCount}</span>
+                )}
+              </button>
+
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('kds')}
+                title="Counterperson Switching to Kitchen KDS (Authorized)"
+              >
+                <Monitor size={14} color="#38BDF8" />
+                <span>Kitchen KDS</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
+                )}
+              </button>
+
+              {/* If an Admin is operating the counter, allow switching back to Admin */}
+              {authSessions?.admin?.token && (
+                <button
+                  className="nav-role-pill"
+                  onClick={() => onRoleSwitch('admin')}
+                  title="Return to Owner Admin"
+                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                >
+                  <BarChart3 size={14} />
+                  <span>Owner Admin</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Kitchen KDS: Locked to KDS Station. Cannot login to Admin or Counter */}
+          {currentRole === 'kds' && (
+            <>
+              <div
+                className="nav-role-pill active"
+                style={{ cursor: 'default', background: 'rgba(56, 189, 248, 0.15)', borderColor: '#38BDF8', color: '#38BDF8' }}
+                title="Kitchen Station Only (Locked from Admin and Counter)"
+              >
+                <Monitor size={14} color="#38BDF8" />
+                <span>Kitchen KDS (Station Locked)</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
+                )}
+              </div>
+
+              {/* If an Admin or Counter is viewing KDS, allow return to their parent station */}
+              {authSessions?.admin?.token && (
+                <button
+                  className="nav-role-pill"
+                  onClick={() => onRoleSwitch('admin')}
+                  title="Admin Return to Back-Office"
+                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                >
+                  <BarChart3 size={14} />
+                  <span>Owner Admin</span>
+                </button>
+              )}
+
+              {authSessions?.counter?.token && !authSessions?.admin?.token && (
+                <button
+                  className="nav-role-pill"
+                  onClick={() => onRoleSwitch('counter')}
+                  title="Return to Counter POS"
+                  style={{ borderColor: '#F59E0B', color: '#F59E0B' }}
+                >
+                  <Layers size={14} />
+                  <span>Back to POS</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Chef Portfolio */}
+          {currentRole === 'chef' && (
+            <>
+              <button
+                className="nav-role-pill active"
+                onClick={() => onRoleSwitch('chef')}
+                title="Chef Credentials & Recipe Spec"
+              >
+                <ShieldCheck size={14} color="#FFFFFF" />
+                <span>Chef Page</span>
+              </button>
+
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('kds')}
+                title="Culinary Inspection on Kitchen KDS"
+              >
+                <Monitor size={14} color="#38BDF8" />
+                <span>Kitchen KDS</span>
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Right: Staff Profile, Sound Toggle, QR Standees, Reset & Logout */}

@@ -67,8 +67,7 @@ export default function BottomNav({
       ];
     } else if (currentRole === 'kds') {
       return [
-        { id: 'kds', label: 'KDS Prep', icon: Layers, badge: activeOrdersCount > 0 ? activeOrdersCount : null },
-        { id: 'counter', label: 'Live Counter', icon: SlidersHorizontal }
+        { id: 'kds', label: 'Kitchen KDS', icon: Layers, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
       ];
     } else {
       // Owner Admin

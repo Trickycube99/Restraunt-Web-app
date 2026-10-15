@@ -18,14 +18,17 @@ Advait Artisanal Indian Kitchen replaces traditional paper order pads, noisy sho
      - **Pay at Counter (Default)**: Cash or Card at counter.
      - **Instant UPI QR & Deep Link**: Dynamic high-resolution QR code generated for the exact bill amount + 1-tap UPI deep link (`upi://pay?pa=...`) for GPay, PhonePe, Paytm, and CRED.
    - **Real-Time 4-Stage Status Tracking (FR-C6)**: Received ➔ Accepted & Cooking ➔ Ready to Serve ➔ Completed, plus instant "Call Server" table notification button.
-2. **Floor Staff & Workstation Access**:
-   - Staff and owners access dedicated workstation screens through direct URLs:
-     - `#/counter` or `#/pos` (Live Counterperson POS & Cashier)
-     - `#/kds` (Kitchen Display System)
-     - `#/admin` or `#/owner` (Owner Executive Back-Office)
-     - `#/portal` or the discreet, subtle "Staff Terminal Portal" link at the bottom footer of the guest menu.
-   - PIN-protected authentication with 1-tap demo auto-fill for testing (`POS: 4421`, `Admin: 8821`, `KDS: 7700`, `Chef: 1002`).
-   - Workstation banner displays operator name, live online status, sound alert mute toggle, table standee QR generator, and a clear "Exit Station / Lock" button to safely return to the diner menu.
+2. **Floor Staff & Workstation Access (Role-Based Access Control)**:
+   - Staff and owners access dedicated workstation screens through direct URLs or hash routes:
+     - `/counter` or `#/counter` (Live Counterperson POS & Cashier)
+     - `/kds` or `#/kds` (Kitchen Display System)
+     - `/admin` or `#/admin` (Owner Executive Back-Office)
+     - `/portal` or `#/portal` (Floor Staff Station Portal)
+   - **Enforced Access Matrix**:
+     - 👑 **Owner Admin (PIN: `8821`)**: Full master access. Can log in and switch between **Admin**, **Counter POS**, and **Kitchen KDS**.
+     - 💼 **Counter Person (PIN: `4421`)**: Can log in to **Counter POS** and **Kitchen KDS** ONLY. Admin Back-Office is strictly blocked.
+     - 🍳 **Kitchen Staff (PIN: `7700`)**: Station-locked to **Kitchen KDS** ONLY. Blocked from both Admin and Counter POS.
+   - Workstation banner displays operator name, live online status, role-filtered station switcher, sound alert mute toggle, table standee QR generator, and an "Exit Station / Lock" button to safely return to the diner menu.
 3. **Real-Time Cross-Tab / Cross-Device Synchronization**:
    - Powered by `BroadcastChannel` with storage fallbacks (<50ms latency).
    - Placing an order from a diner's phone or tab instantly triggers a kitchen bell chime on the counter POS tab and immediately updates the live stack, unaccepted order counter, and owner sales dashboard.

@@ -23,6 +23,7 @@ import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 export default function AuthModal({
   isOpen,
   targetRole = ROLES.COUNTER,
+  activeSessionRole = null,
   onSuccess,
   onClose,
   theme
@@ -74,6 +75,27 @@ export default function AuthModal({
   }, [currentStation, isOpen, roleConfig]);
 
   if (!isOpen) return null;
+
+  // Filter available tabs according to active session role permissions
+  // Kitchen: KDS only
+  // Counter: POS & KDS only (no Admin)
+  // Admin / General: All stations
+  const allTabs = [
+    { id: ROLES.COUNTER, label: 'POS', icon: Layers },
+    { id: ROLES.ADMIN, label: 'Admin', icon: BarChart3 },
+    { id: ROLES.KDS, label: 'KDS', icon: Monitor },
+    { id: ROLES.CHEF, label: 'Chef', icon: ShieldCheck }
+  ];
+
+  const allowedTabs = allTabs.filter((t) => {
+    if (activeSessionRole === ROLES.KDS) {
+      return t.id === ROLES.KDS;
+    }
+    if (activeSessionRole === ROLES.COUNTER) {
+      return t.id === ROLES.COUNTER || t.id === ROLES.KDS;
+    }
+    return true;
+  });
 
   // Quick 1-tap demo credentials filler
   const handleAutoFillDemo = () => {
@@ -153,14 +175,9 @@ export default function AuthModal({
           </button>
         </div>
 
-        {/* Station Selector Tabs for Staff */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, margin: '10px 0 14px' }}>
-          {[
-            { id: ROLES.COUNTER, label: 'POS', icon: Layers },
-            { id: ROLES.ADMIN, label: 'Admin', icon: BarChart3 },
-            { id: ROLES.KDS, label: 'KDS', icon: Monitor },
-            { id: ROLES.CHEF, label: 'Chef', icon: ShieldCheck }
-          ].map((st) => (
+        {/* Station Selector Tabs for Staff (Filtered by Permissions) */}
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allowedTabs.length}, 1fr)`, gap: 6, margin: '10px 0 14px' }}>
+          {allowedTabs.map((st) => (
             <button
               key={st.id}
               type="button"
@@ -182,6 +199,28 @@ export default function AuthModal({
               <span>{st.label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Access Matrix Summary Box */}
+        <div style={{
+          background: '#F0F9FF',
+          border: '1px solid #BAE6FD',
+          borderRadius: 10,
+          padding: '8px 10px',
+          fontSize: 11,
+          color: '#0369A1',
+          marginBottom: 12,
+          lineHeight: 1.45
+        }}>
+          <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, color: '#0284C7' }}>
+            <ShieldCheck size={13} />
+            <span>Role-Based Access Hierarchy:</span>
+          </div>
+          <div style={{ fontSize: 10.5, color: '#0C4A6E' }}>
+            • <b>Admin (8821):</b> Master access to Admin, Counter POS & Kitchen KDS<br />
+            • <b>Counter (4421):</b> Access to Counter POS & Kitchen KDS (Admin blocked)<br />
+            • <b>Kitchen (7700):</b> Access to Kitchen KDS ONLY (Counter & Admin blocked)
+          </div>
         </div>
 
         {/* Security Description */}
@@ -244,7 +283,7 @@ export default function AuthModal({
                 <input
                   type="password"
                   required
-                  placeholder="Enter POS PIN (Demo: 4421)"
+                  placeholder="Enter POS PIN (Demo: 4421) or Admin (8821)"
                   className="auth-input"
                   maxLength={4}
                   value={formData.pin || ''}
@@ -282,13 +321,13 @@ export default function AuthModal({
                 <input
                   type="password"
                   required
-                  placeholder="Enter Master PIN (Demo: 8821)"
+                  placeholder="Enter Master PIN (Demo: 8821) - Admin Only"
                   className="auth-input"
                   maxLength={8}
                   value={formData.pin || ''}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                 />
-                <span className="auth-hint">Protects P&L cash, HDFC bank rec, automated payroll & Tally exports</span>
+                <span className="auth-hint">Protects P&L cash, HDFC bank rec, automated payroll & Tally exports. Counter & Kitchen blocked.</span>
               </div>
             </>
           )}
@@ -321,7 +360,7 @@ export default function AuthModal({
                 <input
                   type="password"
                   required
-                  placeholder="Enter Station PIN (Demo: 7700)"
+                  placeholder="Enter PIN (Kitchen: 7700, Counter: 4421, Admin: 8821)"
                   className="auth-input"
                   maxLength={4}
                   value={formData.pin || ''}
@@ -379,9 +418,9 @@ export default function AuthModal({
               <span>1-Tap Demo Auto-Fill</span>
             </button>
             <div className="auth-demo-hint">
-              {currentStation === ROLES.COUNTER && 'Cashier PIN: 4421'}
-              {currentStation === ROLES.ADMIN && 'admin@advaitkitchen.com • PIN: 8821'}
-              {currentStation === ROLES.KDS && 'Station PIN: 7700'}
+              {currentStation === ROLES.COUNTER && 'Cashier PIN: 4421 • Admin Master: 8821 (Kitchen blocked)'}
+              {currentStation === ROLES.ADMIN && 'admin@advaitkitchen.com • PIN: 8821 (Admin Only - Staff blocked)'}
+              {currentStation === ROLES.KDS && 'Kitchen: 7700 • Counter: 4421 • Admin: 8821 (All Authorized)'}
               {currentStation === ROLES.CHEF && 'Passkey PIN: 1002'}
             </div>
           </div>
