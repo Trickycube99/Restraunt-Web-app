@@ -118,26 +118,31 @@ export default function CounterView({
   // Status Handlers (FR-P2)
   const handleUpdateStatus = (orderId, newStatus, newLabel, progressPercent) => {
     playTapSound();
-    let updatedOrder = null;
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const updatedOrder = {
+      ...target,
+      status: newStatus,
+      statusLabel: newLabel,
+      progressPercent: progressPercent
+    };
+
     setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === orderId) {
-          updatedOrder = {
-            ...ord,
-            status: newStatus,
-            statusLabel: newLabel,
-            progressPercent: progressPercent
-          };
-          return updatedOrder;
-        }
-        return ord;
-      })
+      prev.map((ord) => (ord.id === orderId ? updatedOrder : ord))
     );
 
-    // Broadcast status change in real time to the customer
-    if (updatedOrder) {
-      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, updatedOrder);
+    // Save directly to localStorage immediately so cross-window and storage listeners fire instantly
+    try {
+      const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
+      const updatedList = currentOrders.map((ord) => (ord.id === orderId ? updatedOrder : ord));
+      localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
+    } catch (e) {
+      // ignore
     }
+
+    // Broadcast status change in real time to the customer via BroadcastChannel & sync event ping
+    broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, updatedOrder);
 
     if (newStatus === 'done' || newStatus === 'served') {
       playSuccessChime();
@@ -146,26 +151,29 @@ export default function CounterView({
 
   const handleRejectSubmit = () => {
     playTapSound();
-    let rejectedOrder = null;
+    const target = orders.find((o) => o.id === rejectOrderId);
+    if (!target) return;
+
+    const rejectedOrder = {
+      ...target,
+      status: 'rejected',
+      statusLabel: `Rejected: ${rejectReason}`,
+      progressPercent: 0
+    };
+
     setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === rejectOrderId) {
-          rejectedOrder = {
-            ...ord,
-            status: 'rejected',
-            statusLabel: `Rejected: ${rejectReason}`,
-            progressPercent: 0
-          };
-          return rejectedOrder;
-        }
-        return ord;
-      })
+      prev.map((ord) => (ord.id === rejectOrderId ? rejectedOrder : ord))
     );
 
-    if (rejectedOrder) {
-      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, rejectedOrder);
+    try {
+      const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
+      const updatedList = currentOrders.map((ord) => (ord.id === rejectOrderId ? rejectedOrder : ord));
+      localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
+    } catch (e) {
+      // ignore
     }
 
+    broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, rejectedOrder);
     setRejectOrderId(null);
   };
 
@@ -577,8 +585,8 @@ export default function CounterView({
                       </span>
                     </div>
 
-                    {/* One-tap Status Action Buttons Row (FR-P2) */}
-                    {order.status !== 'done' && order.status !== 'served' && order.status !== 'rejected' && (
+                    {/* One-tap Status Action Buttons Row (FR-P2: Accept -> Cooking, Ready -> Ready, Done -> Served) */}
+                    {order.status !== 'rejected' && (
                       <div
                         style={{
                           display: 'grid',
@@ -596,12 +604,12 @@ export default function CounterView({
                             fontWeight: 700,
                             background: (order.status === 'cooking' || order.status === 'in-progress') ? '#E0F2FE' : '#F3F4F6',
                             color: (order.status === 'cooking' || order.status === 'in-progress') ? '#0284C7' : '#374151',
-                            border: (order.status === 'cooking' || order.status === 'in-progress') ? '1.5px solid #0284C7' : 'none'
+                            border: (order.status === 'cooking' || order.status === 'in-progress') ? '1.5px solid #0284C7' : '1px solid #E5E7EB'
                           }}
                           onClick={() => handleUpdateStatus(order.id, 'cooking', 'Cooking in Kitchen', 50)}
                           title="Accept ticket and mark as Cooking"
                         >
-                          Accept
+                          {(order.status === 'cooking' || order.status === 'in-progress') ? '✓ Cooking' : 'Accept'}
                         </button>
 
                         {/* 2. Ready Button -> Transitions to Ready */}
@@ -613,22 +621,28 @@ export default function CounterView({
                             fontWeight: 700,
                             background: order.status === 'ready' ? '#FEF08A' : '#F3F4F6',
                             color: order.status === 'ready' ? '#A16207' : '#374151',
-                            border: order.status === 'ready' ? '1.5px solid #EAB308' : 'none'
+                            border: order.status === 'ready' ? '1.5px solid #EAB308' : '1px solid #E5E7EB'
                           }}
                           onClick={() => handleUpdateStatus(order.id, 'ready', 'Ready to Serve', 80)}
                           title="Mark dishes Ready for service"
                         >
-                          Ready
+                          {order.status === 'ready' ? '✓ Ready' : 'Ready'}
                         </button>
 
                         {/* 3. Done Button -> Transitions to Served */}
                         <button
                           className="btn-primary-pill"
-                          style={{ padding: '7px 4px', fontSize: 11, background: '#16A34A', fontWeight: 700 }}
+                          style={{
+                            padding: '7px 4px',
+                            fontSize: 11,
+                            background: (order.status === 'served' || order.status === 'done') ? '#15803D' : '#16A34A',
+                            border: (order.status === 'served' || order.status === 'done') ? '1.5px solid #166534' : 'none',
+                            fontWeight: 700
+                          }}
                           onClick={() => handleUpdateStatus(order.id, 'served', 'Served to Table', 100)}
                           title="Mark as Served & Done"
                         >
-                          Done
+                          {(order.status === 'served' || order.status === 'done') ? '✓ Served' : 'Done'}
                         </button>
 
                         {/* 4. Reject Button */}

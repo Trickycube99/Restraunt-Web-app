@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus,
   Minus,
   Sparkles,
   ShoppingBag,
   Clock,
+  Flame,
   ShieldCheck,
   CheckCircle2,
   ChevronRight,
@@ -135,6 +136,19 @@ export default function CustomerView({
   const activeCustomerOrder = orders.find(
     (o) => o.table === activeTable && o.status !== 'rejected'
   ) || (orders.length > 0 && orders[0].table === activeTable ? orders[0] : null);
+
+  // Sound and visual feedback when live status updates in real time (Accept -> Cooking, Ready -> Ready, Done -> Served)
+  const prevStatusRef = useRef(activeCustomerOrder?.status);
+  useEffect(() => {
+    if (activeCustomerOrder && prevStatusRef.current && prevStatusRef.current !== activeCustomerOrder.status) {
+      if (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress') {
+        playAlertChime();
+      } else if (activeCustomerOrder.status === 'ready' || activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done') {
+        playSuccessChime();
+      }
+    }
+    prevStatusRef.current = activeCustomerOrder?.status;
+  }, [activeCustomerOrder?.status]);
 
   const handleDecreaseItemQty = (itemId) => {
     playTapSound();
@@ -475,22 +489,58 @@ export default function CustomerView({
               <div style={{ textAlign: 'right' }}>
                 <span
                   className={`status-pill ${
-                    activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done'
+                    (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
                       ? 'done'
                       : activeCustomerOrder.status === 'rejected'
                       ? 'pending'
+                      : activeCustomerOrder.status === 'ready'
+                      ? 'progress'
                       : 'progress'
                   }`}
-                  style={{ fontSize: 12, padding: '4px 10px' }}
+                  style={{
+                    fontSize: 12,
+                    padding: '4px 12px',
+                    fontWeight: 700,
+                    background:
+                      activeCustomerOrder.status === 'received'
+                        ? '#EFF6FF'
+                        : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
+                        ? '#FFFBEB'
+                        : activeCustomerOrder.status === 'ready'
+                        ? '#FEF08A'
+                        : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
+                        ? '#DCFCE7'
+                        : '#FEE2E2',
+                    color:
+                      activeCustomerOrder.status === 'received'
+                        ? '#1D4ED8'
+                        : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
+                        ? '#B45309'
+                        : activeCustomerOrder.status === 'ready'
+                        ? '#A16207'
+                        : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
+                        ? '#15803D'
+                        : '#DC2626',
+                    border:
+                      activeCustomerOrder.status === 'received'
+                        ? '1.5px solid #60A5FA'
+                        : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
+                        ? '1.5px solid #F59E0B'
+                        : activeCustomerOrder.status === 'ready'
+                        ? '1.5px solid #EAB308'
+                        : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
+                        ? '1.5px solid #16A34A'
+                        : '1.5px solid #EF4444'
+                  }}
                 >
                   {activeCustomerOrder.status === 'received'
-                    ? t('statusReceived')
+                    ? (language === 'hi' ? 'प्राप्त (Received)' : 'Received')
                     : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
-                    ? t('statusCooking')
+                    ? (language === 'hi' ? 'पक रहा है (Cooking)' : 'Cooking')
                     : activeCustomerOrder.status === 'ready'
-                    ? t('statusReady')
+                    ? (language === 'hi' ? 'तैयार (Ready)' : 'Ready')
                     : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
-                    ? t('statusServed')
+                    ? (language === 'hi' ? 'परोसा गया (Served)' : 'Served')
                     : t('statusRejected')}
                 </span>
                 <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--primary-blue)', marginTop: 4 }}>
@@ -517,7 +567,12 @@ export default function CustomerView({
                   <div
                     style={{
                       height: '100%',
-                      background: activeCustomerOrder.status === 'rejected' ? '#DC2626' : '#007AFF',
+                      background:
+                        activeCustomerOrder.status === 'rejected'
+                          ? '#DC2626'
+                          : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
+                          ? '#10B981'
+                          : '#007AFF',
                       width:
                         activeCustomerOrder.status === 'received'
                           ? '12%'
@@ -574,7 +629,7 @@ export default function CustomerView({
                           fontWeight: 700,
                           marginBottom: 4,
                           boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                          transform: isCurrent ? 'scale(1.15)' : 'none',
+                          transform: isCurrent ? 'scale(1.18)' : 'none',
                           transition: 'transform 0.2s ease'
                         }}
                       >
@@ -589,7 +644,82 @@ export default function CustomerView({
               </div>
             </div>
 
-            {/* Served Celebration Alert */}
+            {/* Dynamic Real-Time Live Status Banner for Each Stage */}
+            {activeCustomerOrder.status === 'received' && (
+              <div
+                style={{
+                  background: '#EFF6FF',
+                  border: '1.5px solid #60A5FA',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  color: '#1E40AF',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <Clock size={17} color="#2563EB" />
+                <span>
+                  {language === 'hi'
+                    ? 'ऑर्डर रसोई में प्राप्त हुआ! काउंटर स्वीकार करते ही पकना शुरू होगा।'
+                    : 'Order Received by Kitchen! Counter acceptance will transition this to Cooking.'}
+                </span>
+              </div>
+            )}
+
+            {(activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress') && (
+              <div
+                style={{
+                  background: '#FFFBEB',
+                  border: '1.5px solid #F59E0B',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  color: '#92400E',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <Flame size={17} color="#D97706" />
+                <span>
+                  {language === 'hi'
+                    ? 'रसोई में व्यंजन पक रहे हैं! शेफ ब्रिगेड ताजगी से तैयार कर रही है।'
+                    : 'Dishes are Cooking! Executive chef brigade is actively preparing your order fresh.'}
+                </span>
+              </div>
+            )}
+
+            {activeCustomerOrder.status === 'ready' && (
+              <div
+                style={{
+                  background: '#FEF08A',
+                  border: '1.5px solid #EAB308',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  color: '#854D0E',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <Sparkles size={17} color="#CA8A04" />
+                <span>
+                  {language === 'hi'
+                    ? 'व्यंजन तैयार हैं! सर्विस टीम आपकी टेबल पर ला रही है।'
+                    : 'Order is Ready! Plated hot and on the way to your table right now.'}
+                </span>
+              </div>
+            )}
+
             {(activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done') && (
               <div
                 style={{
@@ -598,7 +728,7 @@ export default function CustomerView({
                   borderRadius: 12,
                   padding: '10px 14px',
                   color: '#065F46',
-                  fontSize: 12,
+                  fontSize: 12.5,
                   fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
@@ -610,7 +740,7 @@ export default function CustomerView({
                 <span>
                   {language === 'hi'
                     ? 'व्यंजन आपकी टेबल पर परोस दिए गए हैं! स्वादिष्ट भोजन का आनंद लें।'
-                    : 'All dishes served hot to your table! Enjoy your meal.'}
+                    : 'All dishes Served to your table! Enjoy your artisanal meal.'}
                 </span>
               </div>
             )}

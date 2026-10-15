@@ -34,7 +34,14 @@ export default function App() {
   // Global Shared States (Persisted in localStorage)
   const [menu, setMenu] = useState(() => loadData(STORAGE_KEYS.MENU, initialMenu));
   const [chef, setChef] = useState(() => loadData(STORAGE_KEYS.CHEF, verifiedChefData));
-  const [orders, setOrders] = useState(() => loadData(STORAGE_KEYS.ORDERS, initialOrders));
+  const [orders, setOrders] = useState(() => {
+    const loaded = loadData(STORAGE_KEYS.ORDERS, initialOrders);
+    return loaded.map((o) =>
+      o.id === 'ORD-8821' && o.status === 'in-progress'
+        ? { ...o, status: 'received', statusLabel: 'Received', progressPercent: 25 }
+        : o
+    );
+  });
   const [expenses, setExpenses] = useState(() => loadData(STORAGE_KEYS.EXPENSES, initialExpenses));
   const [staff, setStaff] = useState(() => loadData(STORAGE_KEYS.STAFF, initialStaff));
   const [offers, setOffers] = useState(() => loadData(STORAGE_KEYS.OFFERS, initialOffers));
@@ -90,6 +97,10 @@ export default function App() {
         setOrders((prev) =>
           prev.map((o) => (o.id === msg.payload.id ? { ...o, ...msg.payload } : o))
         );
+      } else if (msg.type === 'DIRECT_ORDERS_SYNC') {
+        if (Array.isArray(msg.payload)) {
+          setOrders(msg.payload);
+        }
       } else if (msg.type === SYNC_EVENTS.MENU_UPDATED) {
         setMenu(msg.payload);
       } else if (msg.type === SYNC_EVENTS.OFFERS_UPDATED) {

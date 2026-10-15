@@ -68,40 +68,53 @@ export default function KdsView({ orders, setOrders, chef }) {
 
     setBumpedHistory((prev) => [targetOrder, ...prev.slice(0, 4)]);
 
-    let bumpedOrder = null;
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === orderId) {
-          const nextStatus = (o.status === 'cooking' || o.status === 'in-progress' || o.status === 'received') ? 'ready' : 'served';
-          const nextLabel = nextStatus === 'ready' ? 'Ready to Serve' : 'Served to Table';
-          bumpedOrder = { ...o, status: nextStatus, statusLabel: nextLabel, progressPercent: nextStatus === 'ready' ? 85 : 100 };
-          return bumpedOrder;
-        }
-        return o;
-      })
-    );
-    if (bumpedOrder) {
-      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, bumpedOrder);
+    const nextStatus = (targetOrder.status === 'cooking' || targetOrder.status === 'in-progress' || targetOrder.status === 'received') ? 'ready' : 'served';
+    const nextLabel = nextStatus === 'ready' ? 'Ready to Serve' : 'Served to Table';
+    const bumpedOrder = {
+      ...targetOrder,
+      status: nextStatus,
+      statusLabel: nextLabel,
+      progressPercent: nextStatus === 'ready' ? 80 : 100
+    };
+
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? bumpedOrder : o)));
+
+    try {
+      const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
+      const updatedList = currentOrders.map((ord) => (ord.id === orderId ? bumpedOrder : ord));
+      localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
+    } catch (e) {
+      // ignore
     }
+
+    broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, bumpedOrder);
     playSuccessChime();
   };
 
   // Recall bumped ticket
   const handleRecall = (orderId) => {
     playTapSound();
-    let recalledOrder = null;
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === orderId) {
-          recalledOrder = { ...o, status: 'cooking', statusLabel: 'Cooking in Kitchen', progressPercent: 50 };
-          return recalledOrder;
-        }
-        return o;
-      })
-    );
-    if (recalledOrder) {
-      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, recalledOrder);
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+
+    const recalledOrder = {
+      ...target,
+      status: 'cooking',
+      statusLabel: 'Cooking in Kitchen',
+      progressPercent: 50
+    };
+
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? recalledOrder : o)));
+
+    try {
+      const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
+      const updatedList = currentOrders.map((ord) => (ord.id === orderId ? recalledOrder : ord));
+      localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
+    } catch (e) {
+      // ignore
     }
+
+    broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, recalledOrder);
     setBumpedHistory((prev) => prev.filter((o) => o.id !== orderId));
   };
 

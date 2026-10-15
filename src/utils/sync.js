@@ -72,6 +72,18 @@ export function subscribeSyncEvents(callback) {
       } catch (err) {
         console.error('Error parsing storage sync message:', err);
       }
+    } else if (e.key === 'flowscape_orders_v2' && e.newValue) {
+      try {
+        const parsedOrders = JSON.parse(e.newValue);
+        if (Array.isArray(parsedOrders) && callback) {
+          callback({
+            type: 'DIRECT_ORDERS_SYNC',
+            payload: parsedOrders
+          });
+        }
+      } catch (err) {
+        console.error('Error parsing direct orders sync:', err);
+      }
     }
   };
 

@@ -215,8 +215,8 @@ export const initialOrders = [
     table: "Table 04",
     phone: "+91 98112-40192",
     createdAt: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
-    status: "in-progress",
-    statusLabel: "In Kitchen",
+    status: "received",
+    statusLabel: "Received",
     items: [
       { id: 1, name: "Chef's Signature Butter Chicken Brioche Slider", price: 360, quantity: 1, note: "Medium spicy, extra sirka onions" },
       { id: 3, name: "Sparkling Alphonso Mango & Kokum Shikanji", price: 160, quantity: 1, note: "Less ice please" }
@@ -228,7 +228,7 @@ export const initialOrders = [
     tax: 26, // 5% GST (2.5% CGST + 2.5% SGST)
     discount: 0,
     total: 546,
-    progressPercent: 55
+    progressPercent: 25
   },
   {
     id: "ORD-8820",
