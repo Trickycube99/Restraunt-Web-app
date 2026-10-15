@@ -49,26 +49,17 @@ export default function AuthModal({
   useEffect(() => {
     if (!isOpen) return;
     setErrorMessage('');
-    if (currentStation === ROLES.CHEF) {
+    if (currentStation === ROLES.ADMIN) {
       setFormData({
-        email: roleConfig.demoCredentials?.email || 'chef@advait.in',
+        name: '',
+        email: roleConfig.demoCredentials?.email || 'admin@advaitkitchen.com',
         pin: ''
       });
-    } else if (currentStation === ROLES.COUNTER) {
+    } else {
+      // Default to Counter
       setFormData({
         terminal: roleConfig.demoCredentials?.terminal || 'POS-01 (Flagship CP)',
-        cashierName: roleConfig.demoCredentials?.cashierName || 'Rohan Verma',
-        pin: ''
-      });
-    } else if (currentStation === ROLES.KDS) {
-      setFormData({
-        station: roleConfig.demoCredentials?.station || 'Hot Line & Tandoor Station',
-        leadName: roleConfig.demoCredentials?.leadName || 'Vikram Singh',
-        pin: ''
-      });
-    } else if (currentStation === ROLES.ADMIN) {
-      setFormData({
-        email: roleConfig.demoCredentials?.email || 'admin@advaitkitchen.com',
+        cashierName: '',
         pin: ''
       });
     }
@@ -76,23 +67,15 @@ export default function AuthModal({
 
   if (!isOpen) return null;
 
-  // Filter available tabs according to active session role permissions
-  // Kitchen: KDS only
-  // Counter: POS & KDS only (no Admin)
-  // Admin / General: All stations
+  // Only Counterperson POS and Owner Admin require authentication
   const allTabs = [
-    { id: ROLES.COUNTER, label: 'POS', icon: Layers },
-    { id: ROLES.ADMIN, label: 'Admin', icon: BarChart3 },
-    { id: ROLES.KDS, label: 'KDS', icon: Monitor },
-    { id: ROLES.CHEF, label: 'Chef', icon: ShieldCheck }
+    { id: ROLES.COUNTER, label: 'Counterperson POS', icon: Layers },
+    { id: ROLES.ADMIN, label: 'Owner Admin', icon: BarChart3 }
   ];
 
   const allowedTabs = allTabs.filter((t) => {
-    if (activeSessionRole === ROLES.KDS) {
-      return t.id === ROLES.KDS;
-    }
     if (activeSessionRole === ROLES.COUNTER) {
-      return t.id === ROLES.COUNTER || t.id === ROLES.KDS;
+      return t.id === ROLES.COUNTER;
     }
     return true;
   });
@@ -101,7 +84,19 @@ export default function AuthModal({
   const handleAutoFillDemo = () => {
     playTapSound();
     setErrorMessage('');
-    setFormData({ ...roleConfig.demoCredentials });
+    if (currentStation === ROLES.ADMIN) {
+      setFormData({
+        name: 'Sanjay Malhotra',
+        email: 'admin@advaitkitchen.com',
+        pin: '8821'
+      });
+    } else {
+      setFormData({
+        terminal: 'POS-01 (Flagship CP)',
+        cashierName: 'Rohan Verma',
+        pin: '4421'
+      });
+    }
   };
 
   const handleSubmit = (e) => {
@@ -247,6 +242,38 @@ export default function AuthModal({
             <>
               <div className="auth-input-group">
                 <label className="auth-label">
+                  <User size={13} />
+                  <span>Cashier / Counterperson Name *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter Cashier Name (e.g. Rohan Verma)"
+                  className="auth-input"
+                  value={formData.cashierName || ''}
+                  onChange={(e) => setFormData({ ...formData, cashierName: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <KeyRound size={13} />
+                  <span>Staff 4-Digit POS PIN *</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter POS PIN (Demo: 4421)"
+                  className="auth-input"
+                  maxLength={4}
+                  value={formData.pin || ''}
+                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                />
+              </div>
+
+              <div className="auth-input-group">
+                <label className="auth-label">
                   <MapPin size={13} />
                   <span>Cashier Terminal & Branch</span>
                 </label>
@@ -260,37 +287,6 @@ export default function AuthModal({
                   <option value="POS-03 (Indiranagar)">POS-03 (12th Main Indiranagar, BLR)</option>
                 </select>
               </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <User size={13} />
-                  <span>Cashier Shift Operator</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Staff Name"
-                  className="auth-input"
-                  value={formData.cashierName || 'Rohan Verma'}
-                  onChange={(e) => setFormData({ ...formData, cashierName: e.target.value })}
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Staff 4-Digit POS PIN</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter POS PIN (Demo: 4421) or Admin (8821)"
-                  className="auth-input"
-                  maxLength={4}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  autoFocus
-                />
-              </div>
             </>
           )}
 
@@ -300,7 +296,23 @@ export default function AuthModal({
               <div className="auth-input-group">
                 <label className="auth-label">
                   <User size={13} />
-                  <span>Owner Executive Email</span>
+                  <span>Administrator / Owner Name *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter Owner / Admin Name (e.g. Sanjay Malhotra)"
+                  className="auth-input"
+                  value={formData.name || ''}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <KeyRound size={13} />
+                  <span>Owner Executive Email *</span>
                 </label>
                 <input
                   type="email"
@@ -309,101 +321,24 @@ export default function AuthModal({
                   className="auth-input"
                   value={formData.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  autoFocus
                 />
               </div>
 
               <div className="auth-input-group">
                 <label className="auth-label">
                   <KeyRound size={13} />
-                  <span>Master Owner PIN / Password</span>
+                  <span>Master Owner PIN / Password *</span>
                 </label>
                 <input
                   type="password"
                   required
-                  placeholder="Enter Master PIN (Demo: 8821) - Admin Only"
+                  placeholder="Enter Master PIN (Demo: 8821)"
                   className="auth-input"
                   maxLength={8}
                   value={formData.pin || ''}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                 />
-                <span className="auth-hint">Protects P&L cash, HDFC bank rec, automated payroll & Tally exports. Counter & Kitchen blocked.</span>
-              </div>
-            </>
-          )}
-
-          {/* KITCHEN KDS FORM */}
-          {currentStation === ROLES.KDS && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <Utensils size={13} />
-                  <span>Kitchen Prep Station</span>
-                </label>
-                <select
-                  className="auth-input auth-select"
-                  value={formData.station || 'Hot Line & Tandoor Station'}
-                  onChange={(e) => setFormData({ ...formData, station: e.target.value })}
-                >
-                  <option value="Hot Line & Tandoor Station">Station 1: Hot Line & Tandoor</option>
-                  <option value="Curry & Biryani Line">Station 2: Curry & Biryani Line</option>
-                  <option value="Appetizers & Sourdough Pizza">Station 3: Sourdough Pizza & Sides</option>
-                  <option value="Beverages & Cold Bar">Station 4: Cold Beverages & Bar</option>
-                </select>
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Kitchen Station Password / Security PIN</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter Kitchen Password (Demo: 7700)"
-                  className="auth-input"
-                  maxLength={4}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  autoFocus
-                />
-                <span className="auth-hint">Direct kitchen access requires station password authentication on every entry.</span>
-              </div>
-            </>
-          )}
-
-          {/* CHEF FORM */}
-          {currentStation === ROLES.CHEF && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <User size={13} />
-                  <span>Executive Chef Identifier</span>
-                </label>
-                <input
-                  type="email"
-                  disabled
-                  value={formData.email || 'chef@advait.in'}
-                  className="auth-input auth-input-disabled"
-                />
-                <span className="auth-hint">FSSAI Master Lic: #10022001004812</span>
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Culinary Passkey / PIN</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter 4-digit Passkey (Demo: 1002)"
-                  className="auth-input"
-                  maxLength={6}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  autoFocus
-                />
+                <span className="auth-hint">Protects P&L cash, sales analytics, payroll & accounting. Only Admin credentials permitted.</span>
               </div>
             </>
           )}

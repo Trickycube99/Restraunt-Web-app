@@ -107,7 +107,14 @@ export const ROLE_CONFIGS = {
       pin: '4421'
     },
     validate: (creds) => {
+      const name = (creds?.cashierName || creds?.name || '').trim();
+      if (!name || name.length < 2) {
+        return { valid: false, error: 'Please enter your cashier / counter staff name.' };
+      }
       const pin = (creds?.pin || '').toString().trim();
+      if (!pin) {
+        return { valid: false, error: 'Please enter your 4-digit POS PIN.' };
+      }
       // Kitchen PIN 7700 is strictly blocked from Counter
       if (pin === '7700') {
         return { valid: false, error: 'Access Denied: Kitchen staff cannot access Counter POS Terminal.' };
@@ -121,9 +128,10 @@ export const ROLE_CONFIGS = {
     createSession: (creds) => {
       const pin = (creds?.pin || '').toString().trim();
       const isAdminOverride = pin === '8821';
+      const cleanName = (creds?.cashierName || creds?.name || '').trim();
       return {
         role: ROLES.COUNTER,
-        name: isAdminOverride ? 'Sanjay Malhotra (Owner / Admin Override)' : (creds.cashierName || 'Rohan Verma'),
+        name: cleanName || (isAdminOverride ? 'Sanjay Malhotra (Owner / Admin Override)' : 'Rohan Verma'),
         terminal: creds.terminal || 'POS-01 (Flagship CP)',
         shift: 'Morning & Lunch Service',
         token: `pos_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -180,10 +188,15 @@ export const ROLE_CONFIGS = {
     securityLevel: 'Master Financial Executive Dual-Factor (Admin Only)',
     description: 'Real-time sales KPIs, P&L cash check, HDFC bank CSV reconciliation, automated payroll batches, and Tally/Zoho accounting. (Strictly Admin only; Counter and Kitchen blocked).',
     demoCredentials: {
+      name: 'Sanjay Malhotra',
       email: 'admin@advaitkitchen.com',
       pin: '8821'
     },
     validate: (creds) => {
+      const name = (creds?.name || '').trim();
+      if (!name || name.length < 2) {
+        return { valid: false, error: 'Please enter your administrator / owner name.' };
+      }
       const pin = (creds?.pin || '').toString().trim();
       // Kitchen PIN 7700 is strictly blocked
       if (pin === '7700') {
@@ -204,7 +217,7 @@ export const ROLE_CONFIGS = {
     },
     createSession: (creds) => ({
       role: ROLES.ADMIN,
-      name: 'Sanjay Malhotra (Owner)',
+      name: (creds?.name || '').trim() || 'Sanjay Malhotra (Owner)',
       email: creds.email || 'admin@advaitkitchen.com',
       branch: 'All Outlets (Superadmin)',
       token: `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -260,42 +273,30 @@ export function saveStoredSessions(sessions) {
  * - Kitchen can access Kitchen KDS ONLY (NO ADMIN, NO COUNTER)
  */
 export function isAuthenticated(role, activeSessionRole = null) {
-  if (role === ROLES.CUSTOMER) return true;
+  // ONLY Counter and Admin interfaces ask for login!
+  // Customer, Chef, and Kitchen (KDS) open freely without any login gate.
+  if (role === ROLES.CUSTOMER || role === ROLES.CHEF || role === ROLES.KDS) {
+    return true;
+  }
   const sessions = getStoredSessions();
   if (!sessions) return false;
 
-  // 1. Admin Master session can access Counter, Kitchen, and Chef without password
+  // Admin Master session can access both Admin and Counter
   if (sessions[ROLES.ADMIN] && sessions[ROLES.ADMIN].token) {
-    if (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF || role === ROLES.ADMIN) {
-      return true;
-    }
+    return true;
   }
 
-  // 2. Counter session can access Kitchen without password
-  if (sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
-    if (role === ROLES.COUNTER || role === ROLES.KDS) {
-      return true;
-    }
+  // Active session role in state
+  if (activeSessionRole === ROLES.ADMIN) {
+    return true;
   }
 
-  // 3. Active session role in state
-  if (activeSessionRole) {
-    if (activeSessionRole === ROLES.ADMIN && (role === ROLES.COUNTER || role === ROLES.KDS || role === ROLES.CHEF || role === ROLES.ADMIN)) {
-      return true;
-    }
-    if (activeSessionRole === ROLES.COUNTER && (role === ROLES.COUNTER || role === ROLES.KDS)) {
-      return true;
-    }
+  // Counter session can access Counter POS
+  if (role === ROLES.COUNTER && sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
+    return true;
   }
 
-  // 4. KDS DIRECT ACCESS RULE:
-  // KDS asks for password EVERY TIME it is accessed directly (not through Admin or Counter).
-  // Direct KDS access never bypasses password using cached token.
-  if (role === ROLES.KDS) {
-    return false;
-  }
-
-  // 5. Direct active session for other roles (Counter, Admin, Chef)
+  // Direct active session for target role
   if (sessions[role] && sessions[role].token) {
     return true;
   }

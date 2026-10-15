@@ -1,6 +1,13 @@
-// Real-Time Cross-Tab / Cross-Window Event Synchronization
+// Real-Time Cross-Tab, Cross-Window & Cross-Device Event Synchronization
 // Connects Customer Table Orders, Counterperson POS Live Queue, and Owner Admin
-// Uses BroadcastChannel API with localStorage fallback for ultra-low latency (<50ms)
+// Uses Cloud Firestore for multi-device sync + BroadcastChannel for local instant sync (<50ms)
+
+import {
+  syncOrderToCloud,
+  syncStatusToCloud,
+  subscribeToCloudOrders,
+  isCloudSyncEnabled
+} from './firebaseSync';
 
 const CHANNEL_NAME = 'advait_restaurant_pos_channel_v1';
 
@@ -24,18 +31,20 @@ export const SYNC_EVENTS = {
   CALL_SERVER: 'CALL_SERVER'
 };
 
+const currentClientId = Math.random().toString(36).substring(2, 9);
+
 /**
- * Broadcast an event to all open tabs / windows
+ * Broadcast an event to all open tabs, windows and cross-device cloud
  */
 export function broadcastSyncEvent(type, payload = {}) {
   const eventMessage = {
     type,
     payload,
     timestamp: Date.now(),
-    senderId: Math.random().toString(36).substring(2, 9)
+    senderId: currentClientId
   };
 
-  // 1. BroadcastChannel (Modern instant sync)
+  // 1. BroadcastChannel (Local browser instant sync)
   if (broadcastChannel) {
     try {
       broadcastChannel.postMessage(eventMessage);
@@ -44,16 +53,23 @@ export function broadcastSyncEvent(type, payload = {}) {
     }
   }
 
-  // 2. LocalStorage event bus fallback for cross-window reliability
+  // 2. LocalStorage event bus fallback for cross-window reliability on same device
   try {
     localStorage.setItem('flowscape_sync_event_ping', JSON.stringify(eventMessage));
   } catch (err) {
     // Ignore storage quota warnings
   }
+
+  // 3. Cross-Device Cloud Sync (Firebase Firestore)
+  if (type === SYNC_EVENTS.NEW_ORDER && payload) {
+    syncOrderToCloud(payload).catch(() => {});
+  } else if (type === SYNC_EVENTS.ORDER_STATUS_UPDATED && payload && payload.id) {
+    syncStatusToCloud(payload.id, payload).catch(() => {});
+  }
 }
 
 /**
- * Subscribe to real-time events across windows
+ * Subscribe to real-time events across windows and cross-device cloud
  */
 export function subscribeSyncEvents(callback) {
   if (typeof window === 'undefined') return () => {};
@@ -92,11 +108,37 @@ export function subscribeSyncEvents(callback) {
   }
   window.addEventListener('storage', handleStorage);
 
+  // Subscribe to Cloud Sync if configured
+  let unsubscribeCloud = null;
+  if (isCloudSyncEnabled()) {
+    unsubscribeCloud = subscribeToCloudOrders(
+      (newOrder) => {
+        if (callback && newOrder && newOrder.id) {
+          callback({
+            type: SYNC_EVENTS.NEW_ORDER,
+            payload: newOrder
+          });
+        }
+      },
+      (updatedOrder) => {
+        if (callback && updatedOrder && updatedOrder.id) {
+          callback({
+            type: SYNC_EVENTS.ORDER_STATUS_UPDATED,
+            payload: updatedOrder
+          });
+        }
+      }
+    );
+  }
+
   // Return unsubscribe cleanup function
   return () => {
     if (broadcastChannel) {
       broadcastChannel.removeEventListener('message', handleBroadcast);
     }
     window.removeEventListener('storage', handleStorage);
+    if (unsubscribeCloud) {
+      unsubscribeCloud();
+    }
   };
 }
