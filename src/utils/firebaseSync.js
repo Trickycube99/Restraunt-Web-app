@@ -344,3 +344,53 @@ export function subscribeToCloudOffers(onOffersUpdated) {
     return () => {};
   }
 }
+
+/**
+ * Sync dishes & entire menu to Firebase Firestore (Cross-Device)
+ */
+export async function syncMenuToCloud(menu) {
+  const database = initFirebase();
+  if (!database || !Array.isArray(menu)) return false;
+
+  try {
+    const configDocRef = doc(database, 'restaurant_config', 'menu');
+    await setDoc(configDocRef, {
+      menu: sanitizeForFirestore(menu),
+      _cloudSyncedAt: Date.now()
+    }, { merge: true });
+    console.log(`🔥 [Cloud Sync] Menu successfully synced to Firestore (${menu.length} items)`);
+    return true;
+  } catch (err) {
+    console.error('🔥 [Cloud Sync] Error uploading menu to Firestore:', err);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to dishes & menu updates across devices in real time
+ */
+export function subscribeToCloudMenu(onMenuUpdated) {
+  const database = initFirebase();
+  if (!database) return () => {};
+
+  try {
+    const configDocRef = doc(database, 'restaurant_config', 'menu');
+    let isInitial = true;
+    const unsubscribe = onSnapshot(configDocRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data && Array.isArray(data.menu)) {
+          console.log(`🔥 [Cloud Sync] Received menu update from Firestore (${data.menu.length} items, initial: ${isInitial})`);
+          if (onMenuUpdated) onMenuUpdated(data.menu, isInitial);
+        }
+      }
+      isInitial = false;
+    }, (err) => {
+      console.warn('🔥 [Cloud Sync] Error listening to menu changes:', err);
+    });
+    return unsubscribe;
+  } catch (err) {
+    return () => {};
+  }
+}
+

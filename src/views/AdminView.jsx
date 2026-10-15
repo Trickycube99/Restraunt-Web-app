@@ -30,7 +30,9 @@ import {
   Copy,
   Check,
   AlertTriangle,
-  CalendarX
+  CalendarX,
+  Camera,
+  Upload
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import BankReconciliationView from './BankReconciliationView';
@@ -41,6 +43,7 @@ import MultiBranchView from './MultiBranchView';
 import { exportToTallyPrimeXml, exportToZohoBooksCsv } from '../utils/accountingExport';
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 import { STORAGE_KEYS, saveData } from '../utils/storage';
+import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
 
 export default function AdminView({
   orders,
@@ -100,6 +103,8 @@ export default function AdminView({
   const [newDishVeg, setNewDishVeg] = useState(true);
   const [newDishBullets, setNewDishBullets] = useState('');
   const [newDishTags, setNewDishTags] = useState("Chef's Special");
+  const [newDishImage, setNewDishImage] = useState(null);
+  const [imageUploadLoading, setImageUploadLoading] = useState(false);
 
   // User Management State
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -196,12 +201,64 @@ export default function AdminView({
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
+  // Handle Dish Photo Upload with Canvas Resizing & Compression (~25KB)
+  const handleDishImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (JPG, PNG, WebP).');
+      return;
+    }
+
+    setImageUploadLoading(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        // Compress and resize image using canvas to ensure lightweight cross-device sync
+        const maxDim = 400;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setNewDishImage(compressedDataUrl);
+        setImageUploadLoading(false);
+      };
+      img.onerror = () => {
+        setImageUploadLoading(false);
+        alert('Failed to process image. Please try another file.');
+      };
+      img.src = event.target.result;
+    };
+    reader.onerror = () => {
+      setImageUploadLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Menu Management CRUD (FR-A7)
   const handleAddDishSubmit = (e) => {
     e.preventDefault();
     playTapSound();
     const priceNum = parseFloat(newDishPrice);
-    if (!newDishName || isNaN(priceNum)) return;
+    if (!newDishName.trim() || isNaN(priceNum)) return;
 
     const bulletsArray = newDishBullets
       ? newDishBullets.split(',').map((s) => s.trim())
@@ -210,38 +267,38 @@ export default function AdminView({
 
     const newDish = {
       id: Date.now(),
-      name: newDishName,
+      name: newDishName.trim(),
       category: newDishCategory,
       price: priceNum,
       isVeg: newDishVeg,
-      image: newDishVeg
-        ? '/assets/burrata_paneer_pizza.jpg'
-        : '/assets/butter_chicken_burger.jpg',
+      image: newDishImage || null, // If user uploaded an image use it, otherwise null (defaults to cutlery icon)
       isAvailable: true,
       tags: tagsArray,
       bullets: bulletsArray,
       prepTime: '10-12 mins'
     };
 
-    setMenu((prev) => {
-      const updated = [newDish, ...prev];
-      broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
-      return updated;
-    });
+    const updated = [newDish, ...(menu || [])];
+    setMenu(updated);
+    saveData(STORAGE_KEYS.MENU, updated);
+    broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
     setShowAddDishModal(false);
     setNewDishName('');
     setNewDishPrice('');
     setNewDishBullets('');
+    setNewDishImage(null);
     playSuccessChime();
   };
 
   const handleDeleteDish = (id) => {
     playTapSound();
-    setMenu((prev) => {
-      const updated = prev.filter((d) => d.id !== id);
+    if (window.confirm('Delete this dish from the menu across all devices?')) {
+      const updated = (menu || []).filter((d) => d.id !== id);
+      setMenu(updated);
+      saveData(STORAGE_KEYS.MENU, updated);
       broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
-      return updated;
-    });
+      playAlertChime();
+    }
   };
 
   // User Management
@@ -1642,9 +1699,12 @@ export default function AdminView({
                 >
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     <img
-                      src={dish.image}
+                      src={dish.image || DEFAULT_CUTLERY_IMAGE}
                       alt={dish.name}
                       style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover' }}
+                      onError={(e) => {
+                        e.target.src = DEFAULT_CUTLERY_IMAGE;
+                      }}
                     />
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{dish.name}</div>
@@ -1837,6 +1897,86 @@ export default function AdminView({
                     <span>Non-Vegetarian (Red Dot)</span>
                   </label>
                 </div>
+              </div>
+
+              {/* Optional Photo Upload */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
+                  Dish Photo (Optional)
+                </label>
+
+                {newDishImage ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      background: '#F0FDF4',
+                      border: '1.5px solid #86EFAC',
+                      borderRadius: 12,
+                      padding: '10px 12px'
+                    }}
+                  >
+                    <img
+                      src={newDishImage}
+                      alt="Uploaded preview"
+                      style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#15803D' }}>Photo Uploaded ✓</div>
+                      <div style={{ fontSize: 11, color: '#166534' }}>Ready to sync across customer devices</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewDishImage(null)}
+                      style={{
+                        background: '#FEE2E2',
+                        border: '1px solid #FCA5A5',
+                        color: '#DC2626',
+                        borderRadius: 6,
+                        padding: '4px 8px',
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      id="dish-photo-file-input"
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleDishImageUpload}
+                    />
+                    <div
+                      onClick={() => {
+                        const input = document.getElementById('dish-photo-file-input');
+                        if (input) input.click();
+                      }}
+                      style={{
+                        border: '1.5px dashed #CBD5E1',
+                        borderRadius: 12,
+                        padding: '14px',
+                        textAlign: 'center',
+                        background: '#F8FAFC',
+                        cursor: 'pointer',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, color: '#007AFF', fontSize: 13, fontWeight: 600 }}>
+                        <Camera size={16} />
+                        <span>{imageUploadLoading ? 'Optimizing photo...' : 'Upload Dish Photo (Optional)'}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+                        If no photo is uploaded, a default cutlery image will be displayed.
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div style={{ marginBottom: 14 }}>

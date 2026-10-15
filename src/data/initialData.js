@@ -389,3 +389,6 @@ export const initialTheme = {
     dueDate: "28th of this month"
   }
 };
+
+export const DEFAULT_CUTLERY_IMAGE = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" rx="20" fill="%23F1F5F9"/><circle cx="100" cy="100" r="62" fill="%23E2E8F0"/><g transform="translate(68, 68)" stroke="%2364748B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M12 4v22a8 8 0 0 0 8 8v30a4 4 0 0 0 8 0V34a8 8 0 0 0 8-8V4"/><path d="M20 4v18"/><path d="M28 4v18"/><path d="M52 4c2 8 8 18 12 18v42h-8V42c-4-2-8-8-8-16V4z"/></g></svg>`;
+

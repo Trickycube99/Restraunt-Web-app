@@ -14,6 +14,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
+import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
 
 export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
@@ -349,8 +350,12 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
               }}
             >
               <img
-                src={item.image}
+                src={item.image || DEFAULT_CUTLERY_IMAGE}
                 alt={item.name}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = DEFAULT_CUTLERY_IMAGE;
+                }}
                 style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>

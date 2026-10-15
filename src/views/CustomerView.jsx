@@ -30,6 +30,7 @@ import QRCode from 'qrcode';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import { getTranslation } from '../utils/i18n';
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
+import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
 
 export default function CustomerView({
   menu,
@@ -1669,8 +1670,12 @@ export default function CustomerView({
                 {/* Item Image with Veg/Non-veg badge */}
                 <div style={{ position: 'relative', width: 96, height: 96, flexShrink: 0 }}>
                   <img
-                    src={item.image}
+                    src={item.image || DEFAULT_CUTLERY_IMAGE}
                     alt={item.name}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = DEFAULT_CUTLERY_IMAGE;
+                    }}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -1855,8 +1860,12 @@ export default function CustomerView({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img
-                  src={suggestableItem.image}
+                  src={suggestableItem.image || DEFAULT_CUTLERY_IMAGE}
                   alt={suggestableItem.name}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = DEFAULT_CUTLERY_IMAGE;
+                  }}
                   style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover' }}
                 />
                 <div>

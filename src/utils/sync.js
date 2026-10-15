@@ -7,9 +7,11 @@ import {
   syncStatusToCloud,
   syncServerCallToCloud,
   syncOffersToCloud,
+  syncMenuToCloud,
   subscribeToCloudOrders,
   subscribeToCloudServerCalls,
   subscribeToCloudOffers,
+  subscribeToCloudMenu,
   isCloudSyncEnabled,
   getCloudSyncState,
   subscribeCloudSyncState
@@ -78,6 +80,8 @@ export function broadcastSyncEvent(type, payload = {}) {
     syncServerCallToCloud(payload).catch(() => {});
   } else if (type === SYNC_EVENTS.OFFERS_UPDATED && Array.isArray(payload)) {
     syncOffersToCloud(payload).catch(() => {});
+  } else if (type === SYNC_EVENTS.MENU_UPDATED && Array.isArray(payload)) {
+    syncMenuToCloud(payload).catch(() => {});
   }
 }
 
@@ -126,6 +130,7 @@ export function subscribeSyncEvents(callback) {
   let unsubscribeCloudOrders = null;
   let unsubscribeCloudServerCalls = null;
   let unsubscribeCloudOffers = null;
+  let unsubscribeCloudMenu = null;
 
   if (isCloudSyncEnabled()) {
     unsubscribeCloudOrders = subscribeToCloudOrders(
@@ -165,6 +170,15 @@ export function subscribeSyncEvents(callback) {
         });
       }
     });
+
+    unsubscribeCloudMenu = subscribeToCloudMenu((cloudMenu) => {
+      if (callback && Array.isArray(cloudMenu)) {
+        callback({
+          type: SYNC_EVENTS.MENU_UPDATED,
+          payload: cloudMenu
+        });
+      }
+    });
   }
 
   // Return unsubscribe cleanup function
@@ -181,6 +195,9 @@ export function subscribeSyncEvents(callback) {
     }
     if (unsubscribeCloudOffers) {
       unsubscribeCloudOffers();
+    }
+    if (unsubscribeCloudMenu) {
+      unsubscribeCloudMenu();
     }
   };
 }
