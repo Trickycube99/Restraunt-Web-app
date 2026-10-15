@@ -20,6 +20,7 @@ import {
   Globe
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
+import { canKdsReturnToAdmin, canKdsReturnToCounter } from '../utils/auth';
 
 export default function Header({
   chef,
@@ -387,43 +388,68 @@ export default function Header({
             </>
           )}
 
-          {/* Kitchen KDS: Locked to KDS Station. Cannot login to Admin or Counter */}
+          {/* Kitchen KDS: Locked to KDS Station for direct kitchen logins. Can return to Admin or Counter if accessed by them */}
           {currentRole === 'kds' && (
             <>
               <div
                 className="nav-role-pill active"
                 style={{ cursor: 'default', background: 'rgba(56, 189, 248, 0.15)', borderColor: '#38BDF8', color: '#38BDF8' }}
-                title="Kitchen Station Only (Locked from Admin and Counter)"
+                title={
+                  canKdsReturnToAdmin(authSessions)
+                    ? 'Kitchen Station (Accessed by Owner Admin)'
+                    : canKdsReturnToCounter(authSessions)
+                    ? 'Kitchen Station (Accessed by Counter Cashier)'
+                    : 'Kitchen Station Only (Locked from Admin and Counter)'
+                }
               >
                 <Monitor size={14} color="#38BDF8" />
-                <span>Kitchen KDS (Station Locked)</span>
+                <span>
+                  {canKdsReturnToAdmin(authSessions)
+                    ? 'Kitchen KDS (Admin)'
+                    : canKdsReturnToCounter(authSessions)
+                    ? 'Kitchen KDS (Counter)'
+                    : 'Kitchen KDS (Station Locked)'}
+                </span>
                 {activeOrdersCount > 0 && (
                   <span className="nav-badge-pill kds">{activeOrdersCount}</span>
                 )}
               </div>
 
-              {/* If an Admin or Counter is viewing KDS, allow return to their parent station */}
-              {authSessions?.admin?.token && (
-                <button
-                  className="nav-role-pill"
-                  onClick={() => onRoleSwitch('admin')}
-                  title="Admin Return to Back-Office"
-                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6' }}
-                >
-                  <BarChart3 size={14} />
-                  <span>Owner Admin</span>
-                </button>
+              {/* If an Admin is viewing KDS, allow return to Admin Back-Office and Counter POS */}
+              {canKdsReturnToAdmin(authSessions) && (
+                <>
+                  <button
+                    className="nav-role-pill"
+                    onClick={() => onRoleSwitch('admin')}
+                    title="Return to Owner Admin Back-Office"
+                    style={{ borderColor: '#8B5CF6', color: '#8B5CF6', fontWeight: 700 }}
+                  >
+                    <BarChart3 size={14} />
+                    <span>← Owner Admin</span>
+                  </button>
+
+                  <button
+                    className="nav-role-pill"
+                    onClick={() => onRoleSwitch('counter')}
+                    title="Switch to Live Counter POS"
+                    style={{ borderColor: '#0284C7', color: '#0284C7' }}
+                  >
+                    <Layers size={14} />
+                    <span>Live POS</span>
+                  </button>
+                </>
               )}
 
-              {authSessions?.counter?.token && !authSessions?.admin?.token && (
+              {/* If Counterperson (and not Admin) is viewing KDS, allow return to Counter POS */}
+              {canKdsReturnToCounter(authSessions) && !canKdsReturnToAdmin(authSessions) && (
                 <button
                   className="nav-role-pill"
                   onClick={() => onRoleSwitch('counter')}
-                  title="Return to Counter POS"
-                  style={{ borderColor: '#F59E0B', color: '#F59E0B' }}
+                  title="Return to Live Counter POS"
+                  style={{ borderColor: '#F59E0B', color: '#F59E0B', fontWeight: 700 }}
                 >
                   <Layers size={14} />
-                  <span>Back to POS</span>
+                  <span>← Back to POS</span>
                 </button>
               )}
             </>

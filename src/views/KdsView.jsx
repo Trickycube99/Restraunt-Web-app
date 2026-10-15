@@ -11,15 +11,23 @@ import {
   Layers,
   Sparkles,
   Check,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft,
+  Lock,
+  BarChart3
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
+import { canKdsReturnToAdmin, canKdsReturnToCounter, isDirectKitchenOnly } from '../utils/auth';
 
-export default function KdsView({ orders, setOrders, chef }) {
+export default function KdsView({ orders, setOrders, chef, authSessions = {}, onRoleSwitch }) {
   const [selectedStation, setSelectedStation] = useState('all');
   const [bumpedHistory, setBumpedHistory] = useState([]);
   const [currentTime, setCurrentTime] = useState(Date.now());
+
+  const hasAdminAccess = canKdsReturnToAdmin(authSessions);
+  const hasCounterAccess = canKdsReturnToCounter(authSessions);
+  const isLockedDirectKitchen = isDirectKitchenOnly(authSessions);
 
   // Update timer tick every 10 seconds
   useEffect(() => {
@@ -134,18 +142,119 @@ export default function KdsView({ orders, setOrders, chef }) {
           </div>
         </div>
 
-        {/* Recall Button */}
-        {bumpedHistory.length > 0 && (
-          <button
-            className="btn-secondary-pill"
-            style={{ background: '#1E293B', color: '#F8FAFC', border: '1px solid #475569', fontSize: 12 }}
-            onClick={() => handleRecall(bumpedHistory[0].id)}
-            title="Recall last bumped ticket"
-          >
-            <RotateCcw size={13} />
-            <span>Recall #{bumpedHistory[0].id}</span>
-          </button>
-        )}
+        {/* Action Controls & Return Navigation for Admin or Counter Person */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {hasAdminAccess && (
+            <>
+              <button
+                className="btn-secondary-pill"
+                style={{
+                  background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 14px',
+                  boxShadow: '0 2px 10px rgba(124, 58, 237, 0.4)'
+                }}
+                onClick={() => {
+                  playTapSound();
+                  if (onRoleSwitch) onRoleSwitch('admin');
+                }}
+                title="Return to Owner Admin Back-Office"
+              >
+                <ArrowLeft size={13} strokeWidth={2.6} />
+                <span>Back to Owner Admin</span>
+              </button>
+
+              <button
+                className="btn-secondary-pill"
+                style={{
+                  background: '#1E293B',
+                  color: '#38BDF8',
+                  border: '1px solid #0284C7',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '7px 12px'
+                }}
+                onClick={() => {
+                  playTapSound();
+                  if (onRoleSwitch) onRoleSwitch('counter');
+                }}
+                title="Switch to Live Counter POS"
+              >
+                <Layers size={13} />
+                <span>Live POS</span>
+              </button>
+            </>
+          )}
+
+          {hasCounterAccess && !hasAdminAccess && (
+            <button
+              className="btn-secondary-pill"
+              style={{
+                background: 'linear-gradient(135deg, #D97706 0%, #B45309 100%)',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                boxShadow: '0 2px 10px rgba(217, 119, 6, 0.35)'
+              }}
+              onClick={() => {
+                playTapSound();
+                if (onRoleSwitch) onRoleSwitch('counter');
+              }}
+              title="Return to Counter POS Terminal"
+            >
+              <ArrowLeft size={13} strokeWidth={2.6} />
+              <span>Back to Counter POS</span>
+            </button>
+          )}
+
+          {isLockedDirectKitchen && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #EF4444',
+                color: '#FCA5A5',
+                padding: '5px 12px',
+                borderRadius: 20,
+                fontSize: 11,
+                fontWeight: 600
+              }}
+              title="Direct Kitchen Login: Access to Counter POS and Admin Back-Office is strictly denied"
+            >
+              <Lock size={12} color="#EF4444" />
+              <span>Direct Kitchen Login (Station Locked)</span>
+            </div>
+          )}
+
+          {/* Recall Button */}
+          {bumpedHistory.length > 0 && (
+            <button
+              className="btn-secondary-pill"
+              style={{ background: '#1E293B', color: '#F8FAFC', border: '1px solid #475569', fontSize: 12 }}
+              onClick={() => handleRecall(bumpedHistory[0].id)}
+              title="Recall last bumped ticket"
+            >
+              <RotateCcw size={13} />
+              <span>Recall #{bumpedHistory[0].id}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Station Selector Bar */}

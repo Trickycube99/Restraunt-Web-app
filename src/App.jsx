@@ -24,7 +24,10 @@ import {
   isAuthenticated,
   getSession,
   logoutRole,
-  resetAllSessions
+  resetAllSessions,
+  canKdsReturnToAdmin,
+  canKdsReturnToCounter,
+  isDirectKitchenOnly
 } from './utils/auth';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
@@ -211,17 +214,32 @@ export default function App() {
   // Switch role helper with Authentication Verification & Hierarchy Enforcement
   const handleRoleSwitch = (role) => {
     playTapSound();
+    const sessions = authSessions || getStoredSessions();
+    const hasAdminAccess = canKdsReturnToAdmin(sessions);
+    const hasCounterAccess = canKdsReturnToCounter(sessions);
 
-    // 1. Kitchen CANNOT switch or log in to admin or counter
-    if (currentRole === 'kds' && (role === 'admin' || role === 'counter')) {
-      alert('Access Denied: Kitchen staff cannot access Counter POS or Admin Back-Office.');
-      return;
+    // 1. When Kitchen interface is accessed by Admin or Counter person, they CAN go back to their interfaces.
+    // Access is ONLY denied for the person who directly logged into the kitchen interface.
+    if (currentRole === 'kds') {
+      if (role === 'admin') {
+        if (!hasAdminAccess) {
+          alert('Access Denied: Kitchen staff cannot access Owner Back-Office. Direct kitchen login is restricted to Kitchen station.');
+          return;
+        }
+      } else if (role === 'counter') {
+        if (!hasCounterAccess) {
+          alert('Access Denied: Kitchen staff cannot access Counter POS. Direct kitchen login is restricted to Kitchen station.');
+          return;
+        }
+      }
     }
 
-    // 2. Counter can ONLY log in to counter and kitchen (CANNOT access admin)
-    if (currentRole === 'counter' && role === 'admin' && !isAuthenticated('admin')) {
-      setAuthModal({ isOpen: true, targetRole: 'admin' });
-      return;
+    // 2. Counter person can ONLY access counter and kitchen (CANNOT access admin)
+    if (currentRole === 'counter' && role === 'admin') {
+      if (!hasAdminAccess) {
+        alert('Access Denied: Counter staff cannot access Owner Back-Office. Counter permissions are limited to Counter POS and Kitchen.');
+        return;
+      }
     }
 
     // Check authentication with role hierarchy
@@ -380,6 +398,8 @@ export default function App() {
               orders={orders}
               setOrders={setOrders}
               chef={chef}
+              authSessions={authSessions}
+              onRoleSwitch={handleRoleSwitch}
             />
           )}
 
@@ -433,13 +453,19 @@ export default function App() {
           } else if (currentRole === 'counter') {
             setCounterSubTab(tabId);
           } else if (currentRole === 'kds') {
-            if (tabId === 'kds') {
+            if (tabId === 'admin') {
+              handleRoleSwitch('admin');
+            } else if (tabId === 'counter') {
+              handleRoleSwitch('counter');
+            } else if (tabId === 'kds') {
               setActiveTab('kds');
             }
           } else if (currentRole === 'admin') {
             setAdminTab(tabId);
           }
         }}
+        authSessions={authSessions}
+        onRoleSwitch={handleRoleSwitch}
         cartCount={cartCount}
         activeOrdersCount={activeOrdersCount}
         language={language}
@@ -449,7 +475,7 @@ export default function App() {
       <AuthModal
         isOpen={authModal.isOpen}
         targetRole={authModal.targetRole}
-        activeSessionRole={currentRole}
+        activeSessionRole={authSessions?.admin?.token ? 'admin' : authSessions?.counter?.token ? 'counter' : currentRole}
         onSuccess={handleAuthSuccess}
         onClose={() => setAuthModal({ isOpen: false, targetRole: null })}
         theme={theme}

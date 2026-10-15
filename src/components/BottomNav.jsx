@@ -12,9 +12,11 @@ import {
   Receipt,
   DollarSign,
   Users,
-  Palette
+  Palette,
+  Monitor
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
+import { canKdsReturnToAdmin, canKdsReturnToCounter } from '../utils/auth';
 
 export default function BottomNav({
   currentRole,
@@ -22,7 +24,8 @@ export default function BottomNav({
   setActiveTab,
   cartCount,
   activeOrdersCount,
-  language = 'en'
+  language = 'en',
+  authSessions = {}
 }) {
   const getTabs = () => {
     if (currentRole === 'customer') {
@@ -66,8 +69,23 @@ export default function BottomNav({
         { id: 'checklist', label: 'Closing EOD', icon: CheckSquare }
       ];
     } else if (currentRole === 'kds') {
+      const hasAdmin = canKdsReturnToAdmin(authSessions);
+      const hasCounter = canKdsReturnToCounter(authSessions);
+      if (hasAdmin) {
+        return [
+          { id: 'admin', label: 'Admin', icon: BarChart3 },
+          { id: 'counter', label: 'Live POS', icon: Layers },
+          { id: 'kds', label: 'Kitchen KDS', icon: Monitor, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
+        ];
+      }
+      if (hasCounter) {
+        return [
+          { id: 'counter', label: 'Back to POS', icon: Layers },
+          { id: 'kds', label: 'Kitchen KDS', icon: Monitor, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
+        ];
+      }
       return [
-        { id: 'kds', label: 'Kitchen KDS', icon: Layers, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
+        { id: 'kds', label: 'Kitchen KDS', icon: Monitor, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
       ];
     } else {
       // Owner Admin

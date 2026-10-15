@@ -322,8 +322,9 @@ export function authenticateRole(role, credentials) {
   const currentSessions = getStoredSessions();
   currentSessions[role] = session;
 
-  // If Admin Master PIN was used to unlock Counter or Kitchen, also register the Admin session
   const pin = (credentials?.pin || '').toString().trim();
+
+  // If Admin Master PIN was used to unlock Counter or Kitchen, also register the Admin session
   if (pin === '8821' && !currentSessions[ROLES.ADMIN]) {
     currentSessions[ROLES.ADMIN] = ROLE_CONFIGS[ROLES.ADMIN].createSession({
       email: 'admin@advaitkitchen.com',
@@ -331,9 +332,60 @@ export function authenticateRole(role, credentials) {
     });
   }
 
+  // If Counter PIN was used to unlock Kitchen, also register the Counter session
+  if (pin === '4421' && !currentSessions[ROLES.COUNTER]) {
+    currentSessions[ROLES.COUNTER] = ROLE_CONFIGS[ROLES.COUNTER].createSession({
+      terminal: 'POS-01 (Flagship CP)',
+      cashierName: 'Rohan Verma',
+      pin: '4421'
+    });
+  }
+
+  // If directly logging into Kitchen with Kitchen PIN 7700, strictly isolate station from Admin & Counter
+  if (role === ROLES.KDS && pin === '7700') {
+    currentSessions[ROLES.ADMIN] = null;
+    currentSessions[ROLES.COUNTER] = null;
+  }
+
   saveStoredSessions(currentSessions);
 
   return { success: true, session };
+}
+
+/**
+ * Check if the active user in Kitchen KDS has permission to return to Admin
+ */
+export function canKdsReturnToAdmin(sessions = null) {
+  const activeSessions = sessions || getStoredSessions();
+  return Boolean(
+    activeSessions?.[ROLES.ADMIN]?.token ||
+    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.ADMIN
+  );
+}
+
+/**
+ * Check if the active user in Kitchen KDS has permission to return to Counter
+ */
+export function canKdsReturnToCounter(sessions = null) {
+  const activeSessions = sessions || getStoredSessions();
+  return Boolean(
+    activeSessions?.[ROLES.COUNTER]?.token ||
+    activeSessions?.[ROLES.ADMIN]?.token ||
+    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.COUNTER ||
+    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.ADMIN
+  );
+}
+
+/**
+ * Check if the current user directly logged into Kitchen only (pure kitchen staff)
+ */
+export function isDirectKitchenOnly(sessions = null) {
+  const activeSessions = sessions || getStoredSessions();
+  return Boolean(
+    activeSessions?.[ROLES.KDS]?.token &&
+    !canKdsReturnToAdmin(activeSessions) &&
+    !canKdsReturnToCounter(activeSessions)
+  );
 }
 
 /**
