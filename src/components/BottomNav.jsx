@@ -21,21 +21,48 @@ export default function BottomNav({
   activeTab,
   setActiveTab,
   cartCount,
-  activeOrdersCount
+  activeOrdersCount,
+  language = 'en'
 }) {
   const getTabs = () => {
-    if (currentRole === 'customer' || currentRole === 'chef') {
+    if (currentRole === 'customer') {
       return [
-        { id: 'menu', label: 'Menu', icon: Utensils },
-        { id: 'chef', label: 'About Chef', icon: ShieldCheck, hasDot: true },
-        { id: 'cart', label: 'Cart', icon: ShoppingBag, badge: cartCount > 0 ? cartCount : null },
-        { id: 'track', label: 'Live Order', icon: Clock, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
+        {
+          id: 'menu',
+          label: language === 'hi' ? 'मेनू' : 'Menu',
+          icon: Utensils
+        },
+        {
+          id: 'cart',
+          label: language === 'hi' ? 'थाली' : 'Tray',
+          icon: ShoppingBag,
+          badge: cartCount > 0 ? cartCount : null
+        },
+        {
+          id: 'track',
+          label: language === 'hi' ? 'लाइव स्थिति' : 'Live Status',
+          icon: Clock,
+          badge: activeOrdersCount > 0 ? activeOrdersCount : null
+        },
+        {
+          id: 'chef',
+          label: language === 'hi' ? 'शेफ स्टोरी' : 'Chef & Story',
+          icon: ShieldCheck,
+          hasDot: true
+        }
+      ];
+    } else if (currentRole === 'chef') {
+      return [
+        { id: 'menu', label: language === 'hi' ? 'मेनू' : 'Menu', icon: Utensils },
+        { id: 'chef', label: language === 'hi' ? 'शेफ' : 'About Chef', icon: ShieldCheck, hasDot: true },
+        { id: 'cart', label: language === 'hi' ? 'थाली' : 'Tray', icon: ShoppingBag, badge: cartCount > 0 ? cartCount : null },
+        { id: 'track', label: language === 'hi' ? 'लाइव स्थिति' : 'Live Status', icon: Clock, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
       ];
     } else if (currentRole === 'counter') {
       return [
         { id: 'orders', label: 'Live Stack', icon: Layers, badge: activeOrdersCount > 0 ? activeOrdersCount : null },
         { id: 'manual', label: '+ Order', icon: PlusCircle },
-        { id: 'stock', label: 'Menu Edits', icon: SlidersHorizontal },
+        { id: 'stock', label: 'Menu & Rates', icon: SlidersHorizontal },
         { id: 'checklist', label: 'Closing EOD', icon: CheckSquare }
       ];
     } else if (currentRole === 'kds') {
@@ -44,7 +71,7 @@ export default function BottomNav({
         { id: 'counter', label: 'Live Counter', icon: SlidersHorizontal }
       ];
     } else {
-      // Owner Admin: Dedicated 5 mobile footer options requested by user
+      // Owner Admin
       return [
         { id: 'sales', label: 'Sales', icon: BarChart3 },
         { id: 'orders', label: 'Order & CSV', icon: Receipt },

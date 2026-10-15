@@ -33,6 +33,7 @@ import LoyaltyView from './LoyaltyView';
 import AggregatorReconciliationView from './AggregatorReconciliationView';
 import MultiBranchView from './MultiBranchView';
 import { exportToTallyPrimeXml, exportToZohoBooksCsv } from '../utils/accountingExport';
+import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 
 export default function AdminView({
   orders,
@@ -157,6 +158,7 @@ export default function AdminView({
     };
 
     setExpenses((prev) => [newExp, ...prev]);
+    broadcastSyncEvent(SYNC_EVENTS.EXPENSE_ADDED, newExp);
     setExpAmount('');
     setExpDesc('');
     playSuccessChime();
@@ -195,7 +197,11 @@ export default function AdminView({
       prepTime: '10-12 mins'
     };
 
-    setMenu((prev) => [newDish, ...prev]);
+    setMenu((prev) => {
+      const updated = [newDish, ...prev];
+      broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
+      return updated;
+    });
     setShowAddDishModal(false);
     setNewDishName('');
     setNewDishPrice('');
@@ -205,7 +211,11 @@ export default function AdminView({
 
   const handleDeleteDish = (id) => {
     playTapSound();
-    setMenu((prev) => prev.filter((d) => d.id !== id));
+    setMenu((prev) => {
+      const updated = prev.filter((d) => d.id !== id);
+      broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
+      return updated;
+    });
   };
 
   // User Management

@@ -4,24 +4,48 @@
 
 ---
 
-## 🌟 Executive Overview
+## 🌟 Production Architecture & Zero-Auth Customer Experience
 
-Advait Artisanal Indian Kitchen replaces traditional paper order pads, noisy shouting, manual cash calculations, and chaotic month-end aggregator crunches with an integrated, multi-role operating system:
+Advait Artisanal Indian Kitchen replaces traditional paper order pads, noisy shouting, manual cash calculations, and chaotic month-end aggregator crunches with an integrated, multi-role operating system strictly adhering to the **PRD: QR Ordering & Back-Office Web App for Local Restaurants**:
 
-1. **Customer QR Menu**: Zero app install. Diners scan a table QR code, browse categories, filter Pure Veg / Non-Veg, specify cooking preferences ("Jain prep", "Less spicy"), track order status in real time, and pay via instant UPI QR (`advaitkitchen@icici`) or at the counter.
-2. **Official FSSAI Verified Chef Portal**: Diners can verify Executive Chef Rakesh Sharma's government license (`#FSSAI-LIC-10026011009821`), 99.4% 5-Star Clean Dining score, IHM Pusa & ITC Maurya credentials, and cryptographic audit hash (`0x8f9c...4b12`).
-3. **Live Order Counter**: Fast, one-touch order acceptance, status pipeline (Accept ➔ Ready ➔ Done ➔ Reject), inline menu price editing, walk-in POS order punching, and end-of-day cash reconciliation with ₹200 threshold variance alerts.
-4. **Kitchen Display System (KDS)**: Station routing (Tandoor, Curry & Mains, Beverage Bar, Dessert Pantry), prep timers with color-coded urgency alerts, and one-touch bump bar.
-5. **Hardware & Thermal Printer Engine**: ESC/POS thermal printing for 80mm and 58mm guest GST tax invoices and Kitchen Order Tickets (KOT).
-6. **WhatsApp Order Alerts Simulator**: Direct WhatsApp Business notification updates for diners and owner daily closing summaries.
-7. **Bank Statement CSV Reconciliation**: Current account statement import with auto-matching against cash deposits, UPI batches, and card settlements (detecting 1.5% MDR fees).
-8. **Owner Admin Back-Office**: Daily gross sales vs. expenses P&L graph, cash vs. obligations warning system (Rent ₹45k, Payroll ₹106k, EMI ₹18k), statutory Indian payroll assistant (PF 12%, ESI 0.75%, TDS) with direct bank transfer batch export.
-9. **Scale & Intelligence (Phase 3)**:
-   - Raw ingredient inventory with wastage & spoilage tracking.
-   - Diners Club & Loyalty Points (1 pt per ₹10 spent, Silver/Gold/Platinum tiers).
-   - Zomato & Swiggy aggregator weekly settlement reconciliation with dispute detection.
-   - Multi-branch network management (Connaught Place New Delhi, DLF Cyber Hub Gurugram, Indiranagar Bengaluru).
-   - 1-click accounting export to **Tally Prime XML** and **Zoho Books CSV**.
+1. **Zero-Auth Customer QR Menu (`/?table=04`)**:
+   - **No login options visible**: Diners cannot see any options to log in to counter, admin, or staff interfaces.
+   - **Walk-in Table QR Scanning**: Automatically detects table number from QR code (or allows table selection).
+   - **Bilingual Interface**: Seamless 1-tap toggle between **English** and **हिन्दी (Hindi)** (PRD Section 7 requirement).
+   - **Effortless Ordering**: Diners enter their name, add items with per-item cooking notes ("less spicy", "Jain prep", "extra crisp"), and add overall service notes.
+   - **Upsell Suggestables (FR-C8)**: Automatic chef pairing suggestions configured by the restaurant.
+   - **Payment Choice (FR-C7)**:
+     - **Pay at Counter (Default)**: Cash or Card at counter.
+     - **Instant UPI QR & Deep Link**: Dynamic high-resolution QR code generated for the exact bill amount + 1-tap UPI deep link (`upi://pay?pa=...`) for GPay, PhonePe, Paytm, and CRED.
+   - **Real-Time 4-Stage Status Tracking (FR-C6)**: Received ➔ Accepted & Cooking ➔ Ready to Serve ➔ Completed, plus instant "Call Server" table notification button.
+2. **Floor Staff & Workstation Access**:
+   - Staff and owners access dedicated workstation screens through direct URLs:
+     - `#/counter` or `#/pos` (Live Counterperson POS & Cashier)
+     - `#/kds` (Kitchen Display System)
+     - `#/admin` or `#/owner` (Owner Executive Back-Office)
+     - `#/portal` or the discreet, subtle "Staff Terminal Portal" link at the bottom footer of the guest menu.
+   - PIN-protected authentication with 1-tap demo auto-fill for testing (`POS: 4421`, `Admin: 8821`, `KDS: 7700`, `Chef: 1002`).
+   - Workstation banner displays operator name, live online status, sound alert mute toggle, table standee QR generator, and a clear "Exit Station / Lock" button to safely return to the diner menu.
+3. **Real-Time Cross-Tab / Cross-Device Synchronization**:
+   - Powered by `BroadcastChannel` with storage fallbacks (<50ms latency).
+   - Placing an order from a diner's phone or tab instantly triggers a kitchen bell chime on the counter POS tab and immediately updates the live stack, unaccepted order counter, and owner sales dashboard.
+   - Counterperson status updates (Accept ➔ Ready ➔ Done) immediately reflect on the diner's live tracking screen without refreshing.
+4. **Counterperson Interface (FR-P1 to FR-P8)**:
+   - Live order stack with audible chime and visual alerts.
+   - Overdue unaccepted order warning (alerts if an order sits unaccepted for > 2 mins per PRD Section 16).
+   - One-tap status pipeline (Accept, Ready, Done, Reject with reason).
+   - Direct manual order punching (FR-P7) for phone/walk-in orders.
+   - Inline menu stock toggle and price editing (FR-P4).
+   - Daily Closing EOD Checklist (FR-P8 & 5.4) verifying expected vs actual cash, card, and UPI with ₹200 threshold variance audit checks.
+5. **Owner Admin Back-Office (FR-A1 to FR-A7 & 5.4)**:
+   - Sales dashboard (today, week, month split by Cash, Card, UPI).
+   - Order history with instant CSV export.
+   - Daily P&L statement with manual expense entry (ingredients, LPG gas, rent, staff food, maintenance).
+   - Cash vs Profit & Obligations alert (checks cash-in-hand + pending Zomato/Swiggy receivables against upcoming rent, payroll, and EMI commitments).
+   - Top selling items & peak rush hours distribution.
+   - Customer page customizer (theme accent, branding, menu layout grid/list).
+   - Statutory Indian payroll assistant (PF 12%, ESI 0.75%, TDS) with payslip exports.
+   - Bank reconciliation, inventory & wastage, multi-branch, and accounting export (Tally Prime XML & Zoho Books CSV).
 
 ---
 

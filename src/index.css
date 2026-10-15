@@ -1788,3 +1788,131 @@ html, body {
   justify-content: center;
 }
 
+/* ==========================================================================
+   PRODUCTION ISOLATED CUSTOMER & STAFF WORKSTATION STYLES
+   ========================================================================== */
+.customer-mode-header {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.customer-brand {
+  cursor: default;
+}
+
+.header-center-table {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.customer-table-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.customer-table-pill:hover {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+}
+
+.lang-toggle-pill {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Staff workstation header styles */
+.staff-mode-header {
+  background: #0F172A;
+  color: #F8FAFC;
+  border-bottom: 1px solid #1E293B;
+}
+
+.staff-mode-header .brand-title {
+  color: #F8FAFC;
+}
+
+.staff-mode-header .branch-selector-pill {
+  color: #94A3B8;
+}
+
+.staff-station-pill .staff-avatar {
+  background: #1E293B;
+  border-color: #38BDF8;
+}
+
+.staff-online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10B981;
+  display: inline-block;
+  margin-left: 4px;
+}
+
+.staff-center-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.staff-mode-header .nav-role-pill {
+  background: #1E293B;
+  color: #94A3B8;
+  border: 1px solid #334155;
+}
+
+.staff-mode-header .nav-role-pill.active {
+  background: #007AFF;
+  color: #FFFFFF;
+  border-color: #007AFF;
+}
+
+.staff-mode-header .header-auth-profile-pill {
+  background: #1E293B;
+  color: #F8FAFC;
+  border-color: #334155;
+}
+
+.staff-mode-header .btn-secondary-pill {
+  background: #1E293B;
+  color: #F8FAFC;
+  border-color: #334155;
+}
+
+.staff-mode-header .btn-secondary-pill:hover {
+  background: #334155;
+}
+
+.staff-exit-pill {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #F87171 !important;
+}
+
+.staff-exit-pill:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+

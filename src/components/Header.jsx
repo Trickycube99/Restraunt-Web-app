@@ -13,10 +13,11 @@ import {
   CheckCircle2,
   Utensils,
   Lock,
-  Unlock,
   User,
   LogOut,
-  KeyRound
+  Volume2,
+  VolumeX,
+  Globe
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
 
@@ -31,21 +32,22 @@ export default function Header({
   setSearchQuery,
   isSearchOpen,
   setIsSearchOpen,
-  onChefClick,
   activeOrdersCount,
   cartCount,
   cartTotal,
   onOpenCart,
   onResetDemo,
   authSessions = {},
-  onOpenAuth,
   onLogoutRole,
-  onOpenTableQr
+  onOpenTableQr,
+  language = 'en',
+  onToggleLanguage,
+  isSoundMuted = false,
+  onToggleSound
 }) {
   const [activeBranch, setActiveBranch] = useState('Connaught Place, New Delhi');
   const [showBranchMenu, setShowBranchMenu] = useState(false);
-  const [showMobileRoleMenu, setShowMobileRoleMenu] = useState(false);
-  const [showAuthMenu, setShowAuthMenu] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
 
   const branches = [
     'Connaught Place, New Delhi (Flagship)',
@@ -54,36 +56,209 @@ export default function Header({
   ];
 
   const currentSession = authSessions[currentRole];
+  const isCustomer = currentRole === 'customer';
 
+  // -------------------------------------------------------------
+  // 1. DEDICATED CUSTOMER-FACING HEADER
+  // In accordance with PRD: Absolutely NO login buttons, NO admin/counter links
+  // -------------------------------------------------------------
+  if (isCustomer) {
+    return (
+      <>
+        <header className="production-header customer-mode-header">
+          {/* Left: Restaurant Brand & FSSAI Badge */}
+          <div className="header-left">
+            <div className="brand-pill customer-brand">
+              <div className="brand-avatar-box">
+                {chef?.portrait ? (
+                  <img src={chef.portrait} alt={theme.restaurantName} />
+                ) : (
+                  <span>AD</span>
+                )}
+              </div>
+              <div className="brand-info">
+                <div className="brand-name-row">
+                  <span className="brand-title">{theme.restaurantName || 'Advait Artisanal Kitchen'}</span>
+                </div>
+                <div className="fssai-micro-badge">
+                  <ShieldCheck size={11} color="#16A34A" />
+                  <span>FSSAI 5-Star Clean Dining</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Table Badge (Tap to change table if needed) */}
+          <div className="header-center-table">
+            <button
+              className="customer-table-pill"
+              onClick={() => {
+                playTapSound();
+                setShowTableModal(true);
+              }}
+              title="Current Dine-in Table (Tap to switch)"
+            >
+              <Utensils size={13} color="#007AFF" />
+              <span className="table-name-text">{activeTable}</span>
+              <ChevronDown size={11} color="#6B7280" />
+            </button>
+          </div>
+
+          {/* Right: Language Switcher, Search, and Cart Tray */}
+          <div className="header-right">
+            {/* Language Switcher Pill (PRD Section 7: English & Hindi Support) */}
+            <button
+              className="btn-secondary-pill lang-toggle-pill"
+              onClick={() => {
+                playTapSound();
+                if (onToggleLanguage) onToggleLanguage();
+              }}
+              title={language === 'en' ? 'Switch to Hindi (हिन्दी)' : 'Switch to English'}
+            >
+              <Globe size={13} color="#007AFF" />
+              <span style={{ fontWeight: 600 }}>{language === 'en' ? 'हिन्दी' : 'EN'}</span>
+            </button>
+
+            {/* Search Icon */}
+            <button
+              className={`nav-icon-btn ${isSearchOpen ? 'active' : ''}`}
+              onClick={() => {
+                playTapSound();
+                setIsSearchOpen(!isSearchOpen);
+              }}
+              title="Search dishes & flavors"
+              aria-label="Search dishes"
+            >
+              <Search size={16} />
+            </button>
+
+            {/* Quick Cart / Order Tray Pill */}
+            {cartCount > 0 && (
+              <button
+                className="btn-primary-pill header-cart-pill"
+                onClick={() => {
+                  playTapSound();
+                  if (onOpenCart) onOpenCart();
+                }}
+                title="View your dining tray"
+              >
+                <ShoppingBag size={14} />
+                <span>₹{cartTotal.toFixed(0)}</span>
+                <span className="cart-bubble-count">{cartCount}</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Expandable Search Input Row */}
+        {isSearchOpen && (
+          <div className="header-search-bar">
+            <div className="search-bar-inner">
+              <Search size={16} color="#9CA3AF" />
+              <input
+                type="text"
+                placeholder={language === 'hi' ? 'व्यंजन या स्वाद खोजें...' : 'Search artisanal dishes, ingredients or dietary choices...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  className="clear-search-btn"
+                  onClick={() => setSearchQuery('')}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Guest Table Selector Modal */}
+        {showTableModal && (
+          <div className="modal-overlay" onClick={() => setShowTableModal(false)}>
+            <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-drag-pill" />
+              <div className="card-heading" style={{ fontSize: 18, marginBottom: 4 }}>
+                {language === 'hi' ? 'अपनी टेबल चुनें' : 'Select Your Table'}
+              </div>
+              <div className="card-meta-text" style={{ marginBottom: 16 }}>
+                {language === 'hi'
+                  ? 'अपना ऑर्डर सीधे इसी टेबल पर प्राप्त करने के लिए नंबर चुनें'
+                  : 'Orders will be delivered directly to this table number by our service team.'}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+                {(theme?.tables || [
+                  'Table 01', 'Table 02', 'Table 03', 'Table 04',
+                  'Table 05', 'Table 06', 'Table 07', 'Counter / Takeaway'
+                ]).map((tbl) => (
+                  <button
+                    key={tbl}
+                    className={`btn-secondary-pill ${activeTable === tbl ? 'active' : ''}`}
+                    style={{
+                      padding: '10px 6px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      justifyContent: 'center',
+                      background: activeTable === tbl ? '#EFF6FF' : '#F9FAFB',
+                      borderColor: activeTable === tbl ? '#007AFF' : '#E5E7EB',
+                      color: activeTable === tbl ? '#007AFF' : 'var(--text-primary)'
+                    }}
+                    onClick={() => {
+                      playTapSound();
+                      setActiveTable(tbl);
+                      setShowTableModal(false);
+                    }}
+                  >
+                    {tbl}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                className="btn-primary-pill full-width"
+                onClick={() => setShowTableModal(false)}
+              >
+                {language === 'hi' ? 'टेबल कन्फर्म करें' : `Confirm ${activeTable}`}
+              </button>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // 2. DEDICATED STAFF WORKSTATION HEADER (Counterperson / KDS / Admin)
+  // High-productivity terminal with station switching, alerts & session locking
+  // -------------------------------------------------------------
   return (
     <>
-      <header className="production-header">
-        {/* Left Section: Brand, FSSAI Badge & Branch Switcher */}
+      <header className="production-header staff-mode-header">
+        {/* Left: Station Badge & Branch Switcher */}
         <div className="header-left">
-          <div
-            className="brand-pill"
-            onClick={() => {
-              playTapSound();
-              if (onChefClick) onChefClick();
-            }}
-            title="Advait Kitchen & Verified Executive Chef Rakesh Sharma"
-          >
-            <div className="brand-avatar-box">
-              {chef?.portrait ? (
-                <img src={chef.portrait} alt={chef.name} />
-              ) : (
-                <span>AD</span>
-              )}
+          <div className="brand-pill staff-station-pill">
+            <div className="brand-avatar-box staff-avatar">
+              {currentRole === 'counter' && <Layers size={16} color="#FFFFFF" />}
+              {currentRole === 'kds' && <Monitor size={16} color="#FFFFFF" />}
+              {currentRole === 'admin' && <BarChart3 size={16} color="#FFFFFF" />}
+              {currentRole === 'chef' && <ShieldCheck size={16} color="#FFFFFF" />}
             </div>
             <div className="brand-info">
               <div className="brand-name-row">
-                <span className="brand-title">{theme.restaurantName || 'Advait Artisanal Indian Kitchen'}</span>
-                <span className="fssai-micro-badge">
-                  <ShieldCheck size={11} color="#16A34A" />
-                  <span>FSSAI Verified</span>
+                <span className="brand-title">
+                  {currentRole === 'counter'
+                    ? 'POS Terminal 01'
+                    : currentRole === 'kds'
+                    ? 'Kitchen KDS Display'
+                    : currentRole === 'admin'
+                    ? 'Owner Executive Back-Office'
+                    : 'Verified Chef Portfolio'}
                 </span>
+                <span className="staff-online-dot" title="Workstation Online" />
               </div>
-              
+
               {/* Branch Selector Pill */}
               <div
                 className="branch-selector-pill"
@@ -121,48 +296,15 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center Section: Full Desktop / Tablet Role Navigation */}
-        <nav className="header-center-nav">
-          <button
-            className={`nav-role-pill ${currentRole === 'customer' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('customer')}
-          >
-            <QrCode size={14} />
-            <span>QR Menu</span>
-            {!authSessions['customer'] && <Lock size={10} className="role-lock-badge" />}
-            {currentRole === 'customer' && (
-              <span
-                className="table-tag-pill"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  playTapSound();
-                  const nextIdx = (theme.tables.indexOf(activeTable) + 1) % theme.tables.length;
-                  setActiveTable(theme.tables[nextIdx]);
-                }}
-                title="Switch simulated table"
-              >
-                {activeTable}
-                <ChevronDown size={9} />
-              </span>
-            )}
-          </button>
-
-          <button
-            className={`nav-role-pill ${currentRole === 'chef' ? 'active' : ''}`}
-            onClick={() => onRoleSwitch('chef')}
-          >
-            <ShieldCheck size={14} color={currentRole === 'chef' ? '#FFFFFF' : '#007AFF'} />
-            <span>About Chef</span>
-            {!authSessions['chef'] && <Lock size={10} className="role-lock-badge" />}
-          </button>
-
+        {/* Center: Workstation Switching (Only accessible inside staff session) */}
+        <nav className="header-center-nav staff-center-nav">
           <button
             className={`nav-role-pill ${currentRole === 'counter' ? 'active' : ''}`}
             onClick={() => onRoleSwitch('counter')}
+            title="Live Counter POS Queue & Cash Check"
           >
             <Layers size={14} />
             <span>Live POS</span>
-            {!authSessions['counter'] && <Lock size={10} className="role-lock-badge" />}
             {activeOrdersCount > 0 && (
               <span className="nav-badge-pill">{activeOrdersCount}</span>
             )}
@@ -171,10 +313,10 @@ export default function Header({
           <button
             className={`nav-role-pill ${currentRole === 'kds' ? 'active' : ''}`}
             onClick={() => onRoleSwitch('kds')}
+            title="Kitchen Display Screen"
           >
             <Monitor size={14} color={currentRole === 'kds' ? '#FFFFFF' : '#38BDF8'} />
             <span>Kitchen KDS</span>
-            {!authSessions['kds'] && <Lock size={10} className="role-lock-badge" />}
             {activeOrdersCount > 0 && (
               <span className="nav-badge-pill kds">{activeOrdersCount}</span>
             )}
@@ -183,183 +325,91 @@ export default function Header({
           <button
             className={`nav-role-pill ${currentRole === 'admin' ? 'active' : ''}`}
             onClick={() => onRoleSwitch('admin')}
+            title="Sales, Finance, P&L & Checklists"
           >
             <BarChart3 size={14} />
             <span>Owner Admin</span>
-            {!authSessions['admin'] && <Lock size={10} className="role-lock-badge" />}
+          </button>
+
+          <button
+            className={`nav-role-pill ${currentRole === 'chef' ? 'active' : ''}`}
+            onClick={() => onRoleSwitch('chef')}
+            title="Chef Credentials & Recipe Spec"
+          >
+            <ShieldCheck size={14} color={currentRole === 'chef' ? '#FFFFFF' : '#007AFF'} />
+            <span>Chef Page</span>
           </button>
         </nav>
 
-        {/* Right Section: Search, Cart Summary & Utilities */}
+        {/* Right: Staff Profile, Sound Toggle, QR Standees, Reset & Logout */}
         <div className="header-right">
-          {/* Active Interface Auth Profile Pill */}
-          <div style={{ position: 'relative' }}>
-            <button
-              className={`header-auth-profile-pill ${!currentSession ? 'unauthenticated' : ''}`}
-              onClick={() => {
-                playTapSound();
-                setShowAuthMenu(!showAuthMenu);
-              }}
-              title="Active interface session & role credentials"
-            >
-              {currentSession ? (
-                <>
-                  <User size={13} color="#007AFF" />
-                  <span>{currentSession.name.split(' ')[0]}</span>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
-                </>
-              ) : (
-                <>
-                  <Lock size={12} color="#D97706" />
-                  <span>Locked</span>
-                </>
-              )}
-              <ChevronDown size={11} />
-            </button>
-
-            {showAuthMenu && (
-              <div className="header-auth-menu">
-                <div className="header-auth-menu-header">
-                  <div className="header-auth-menu-name">
-                    {currentSession ? currentSession.name : `${currentRole.toUpperCase()} (Not Authenticated)`}
-                  </div>
-                  <div className="header-auth-menu-detail">
-                    {currentSession
-                      ? (currentSession.table || currentSession.terminal || currentSession.station || currentSession.email || currentSession.fssaiLicense)
-                      : 'Requires role authentication'}
-                  </div>
-                </div>
-
-                <div
-                  className="header-auth-menu-item"
-                  onClick={() => {
-                    playTapSound();
-                    setShowAuthMenu(false);
-                    if (onOpenAuth) onOpenAuth(currentRole);
-                  }}
-                >
-                  <KeyRound size={14} color="#007AFF" />
-                  <span>{currentSession ? 'Switch User / Re-login' : 'Authenticate Role'}</span>
-                </div>
-
-                {currentSession && (
-                  <div
-                    className="header-auth-menu-item danger"
-                    onClick={() => {
-                      playTapSound();
-                      setShowAuthMenu(false);
-                      if (onLogoutRole) onLogoutRole(currentRole);
-                    }}
-                  >
-                    <LogOut size={14} color="#DC2626" />
-                    <span>Lock / Sign Out</span>
-                  </div>
-                )}
-              </div>
-            )}
+          {/* Active Staff Operator Badge */}
+          <div className="header-auth-profile-pill">
+            <User size={13} color="#007AFF" />
+            <span>{currentSession ? currentSession.name.split(' ')[0] : 'Staff'}</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
           </div>
 
-          {/* Mobile Role Switcher Trigger */}
-          <div className="mobile-role-selector">
-            <button
-              className="btn-secondary-pill mobile-role-btn"
-              onClick={() => {
-                playTapSound();
-                setShowMobileRoleMenu(!showMobileRoleMenu);
-              }}
-            >
-              <span>{currentRole === 'customer' ? 'QR Menu' : currentRole === 'chef' ? 'About Chef' : currentRole === 'counter' ? 'Live POS' : currentRole === 'kds' ? 'KDS' : 'Admin'}</span>
-              <ChevronDown size={12} />
-            </button>
-
-            {showMobileRoleMenu && (
-              <div className="mobile-role-dropdown">
-                {[
-                  { id: 'customer', label: 'Customer (QR Menu)', icon: QrCode },
-                  { id: 'chef', label: 'Verified Chef Page', icon: ShieldCheck },
-                  { id: 'counter', label: `Live POS (${activeOrdersCount})`, icon: Layers },
-                  { id: 'kds', label: `Kitchen KDS (${activeOrdersCount})`, icon: Monitor },
-                  { id: 'admin', label: 'Owner Back-Office', icon: BarChart3 }
-                ].map((item) => (
-                  <div
-                    key={item.id}
-                    className={`mobile-role-dropdown-item ${currentRole === item.id ? 'active' : ''}`}
-                    onClick={() => {
-                      playTapSound();
-                      onRoleSwitch(item.id);
-                      setShowMobileRoleMenu(false);
-                    }}
-                  >
-                    <item.icon size={14} />
-                    <span>{item.label}</span>
-                    {!authSessions[item.id] && <Lock size={10} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Search Button */}
+          {/* Sound Alert Toggle */}
           <button
-            className={`nav-icon-btn ${isSearchOpen ? 'active' : ''}`}
+            className={`nav-icon-btn ${isSoundMuted ? 'muted' : ''}`}
             onClick={() => {
               playTapSound();
-              setIsSearchOpen(!isSearchOpen);
+              if (onToggleSound) onToggleSound();
             }}
-            title="Search dishes & dietary preferences"
+            title={isSoundMuted ? 'Unmute Audio Chime Alerts' : 'Mute Audio Alerts'}
+            aria-label="Toggle Sound"
           >
-            <Search size={16} />
+            {isSoundMuted ? <VolumeX size={15} color="#DC2626" /> : <Volume2 size={15} color="#16A34A" />}
           </button>
 
-          {/* Quick Cart Trigger (Visible on all views if cart has items) */}
-          {cartCount > 0 && (
-            <button
-              className="btn-primary-pill header-cart-pill"
-              onClick={() => {
-                playTapSound();
-                if (onOpenCart) onOpenCart();
-              }}
-              title="Open your dining tray"
-            >
-              <ShoppingBag size={14} />
-              <span>₹{cartTotal.toFixed(0)}</span>
-              <span className="cart-bubble-count">{cartCount}</span>
-            </button>
-          )}
-
-          {/* Table Standee QR Code Generator Button */}
+          {/* Table Standee QR Code Generator Modal Trigger */}
           <button
             className="btn-secondary-pill qr-tent-pill"
             onClick={() => {
               playTapSound();
               if (onOpenTableQr) onOpenTableQr();
             }}
-            title="Generate & print contactless table QR standee (Zero auth required)"
+            title="Generate & print contactless table QR standees"
           >
             <QrCode size={13} color="#007AFF" />
-            <span className="qr-pill-label">Table QR</span>
+            <span className="qr-pill-label">Table QRs</span>
           </button>
 
           {/* Reset Demo Data Button */}
           <button
             className="btn-secondary-pill reset-demo-pill"
             onClick={onResetDemo}
-            title="Reset demonstration data to defaults"
+            title="Reset demonstration data to fresh defaults"
           >
             <RotateCcw size={12} />
             <span className="reset-label">Reset</span>
           </button>
+
+          {/* Exit / Lock Station Button (Returns safely to customer dining view) */}
+          <button
+            className="btn-secondary-pill staff-exit-pill"
+            style={{ color: '#DC2626', borderColor: '#FECACA' }}
+            onClick={() => {
+              playTapSound();
+              if (onLogoutRole) onLogoutRole(currentRole);
+            }}
+            title="Lock workstation and return to customer QR menu"
+          >
+            <LogOut size={13} color="#DC2626" />
+            <span className="reset-label">Exit Station</span>
+          </button>
         </div>
       </header>
 
-      {/* Expandable Search Input Row */}
+      {/* Expandable Search Input Row (for staff menu lookups) */}
       {isSearchOpen && (
         <div className="header-search-bar">
           <div className="search-bar-inner">
             <Search size={16} color="#9CA3AF" />
             <input
               type="text"
-              placeholder="Search artisanal signatures, ingredients, or dietary preferences..."
+              placeholder="Search dishes or recipes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus

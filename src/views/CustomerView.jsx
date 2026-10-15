@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Plus,
   Minus,
@@ -9,15 +9,23 @@ import {
   CheckCircle2,
   ChevronRight,
   Filter,
-  Flame,
-  Coffee,
   X,
   CreditCard,
   QrCode,
   ArrowRight,
-  MessageSquare
+  MessageSquare,
+  Bell,
+  Check,
+  Phone,
+  AlertTriangle,
+  Lock,
+  User,
+  Edit2,
+  Utensils
 } from 'lucide-react';
-import { playTapSound, playSuccessChime } from '../utils/audio';
+import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
+import { getTranslation } from '../utils/i18n';
+import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 
 export default function CustomerView({
   menu,
@@ -31,26 +39,71 @@ export default function CustomerView({
   onPlaceOrder,
   onGoToChef,
   searchQuery,
-  offers
+  offers,
+  language = 'en',
+  onOpenStaffPortal,
+  activeTab = 'menu',
+  setActiveTab
 }) {
+  const t = (key) => getTranslation(language, key);
+
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [vegOnly, setVegOnly] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [customizingItem, setCustomizingItem] = useState(null);
   const [itemNoteInput, setItemNoteInput] = useState('');
   
-  // Checkout Form State
-  const [customerName, setCustomerName] = useState('Rohan');
-  const [customerPhone, setCustomerPhone] = useState('+91 98112-40192');
+  // Diner Identification State (Mandatory Pop-up on Menu Landing)
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('advait_customer_name') || '';
+    }
+    return '';
+  });
+  const [customerPhone, setCustomerPhone] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('advait_customer_phone') || '';
+    }
+    return '';
+  });
+  const [showNameModal, setShowNameModal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !localStorage.getItem('advait_customer_name');
+    }
+    return true;
+  });
+  const [customerNameInput, setCustomerNameInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('advait_customer_name') || '';
+    }
+    return '';
+  });
+  const [customerPhoneInput, setCustomerPhoneInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('advait_customer_phone') || '';
+    }
+    return '';
+  });
+  const [nameError, setNameError] = useState('');
+
   const [orderNote, setOrderNote] = useState('');
   const [paymentMode, setPaymentMode] = useState('counter'); // 'counter' | 'upi'
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [promoInput, setPromoInput] = useState('');
   const [promoMessage, setPromoMessage] = useState('');
   const [showUpiModal, setShowUpiModal] = useState(false);
+  const [serverCalledAlert, setServerCalledAlert] = useState(false);
+  const secretTapCount = useRef(0);
+  const secretTapTimer = useRef(null);
 
-  // Extract categories
-  const categories = ['All', 'Signatures', 'Mains & Sides', 'Beverages', 'Desserts'];
+  // Category translation list
+  const categoryKeys = [
+    { id: 'All', label: language === 'hi' ? 'सभी व्यंजन' : 'All' },
+    { id: 'Signatures', label: language === 'hi' ? 'शेफ स्पेशल' : 'Signatures' },
+    { id: 'Mains & Sides', label: language === 'hi' ? 'मुख्य भोजन व स्नैक्स' : 'Mains & Sides' },
+    { id: 'Beverages', label: language === 'hi' ? 'पेय पदार्थ' : 'Beverages' },
+    { id: 'Desserts', label: language === 'hi' ? 'मिठाइयां' : 'Desserts' }
+  ];
 
   // Filter menu
   const filteredMenu = menu.filter((item) => {
@@ -59,8 +112,8 @@ export default function CustomerView({
     const matchesSearch =
       !searchQuery ||
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.bullets.some((b) => b.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      item.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+      (item.bullets && item.bullets.some((b) => b.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+      (item.tags && item.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase())));
     return matchesCat && matchesVeg && matchesSearch;
   });
 
@@ -76,12 +129,50 @@ export default function CustomerView({
   const totalItemCount = cart.reduce((acc, i) => acc + i.quantity, 0);
 
   // Suggestable item for upsell (FR-C8)
-  const suggestableItem = menu.find((item) => item.id === 3); // Shikanji Cooler
+  const suggestableItem = menu.find((item) => item.id === 3) || menu[0];
 
-  // Find latest active customer order for live tracking
+  // Find latest active customer order for this table
   const activeCustomerOrder = orders.find(
-    (o) => o.table === activeTable && o.status !== 'done' && o.status !== 'rejected'
-  ) || orders[0];
+    (o) => o.table === activeTable && o.status !== 'rejected'
+  ) || (orders.length > 0 && orders[0].table === activeTable ? orders[0] : null);
+
+  const handleDecreaseItemQty = (itemId) => {
+    playTapSound();
+    setCart((prevCart) => {
+      const index = prevCart.findIndex((ci) => ci.id === itemId);
+      if (index === -1) return prevCart;
+      const updated = [...prevCart];
+      const currentItem = updated[index];
+      if (currentItem.quantity <= 1) {
+        updated.splice(index, 1);
+      } else {
+        updated[index] = { ...currentItem, quantity: currentItem.quantity - 1 };
+      }
+      return updated;
+    });
+  };
+
+  const handleSaveDinerName = (e) => {
+    if (e) e.preventDefault();
+    const cleanName = customerNameInput.trim();
+    if (!cleanName || cleanName.length < 2) {
+      setNameError(language === 'hi' ? 'कृपया आगे बढ़ने के लिए अपना नाम दर्ज करें।' : 'Please enter your name to proceed.');
+      playAlertChime();
+      return;
+    }
+
+    setCustomerName(cleanName);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('advait_customer_name', cleanName);
+      if (customerPhoneInput.trim()) {
+        localStorage.setItem('advait_customer_phone', customerPhoneInput.trim());
+      }
+    }
+    setCustomerPhone(customerPhoneInput.trim());
+    setShowNameModal(false);
+    setNameError('');
+    playSuccessChime();
+  };
 
   const handleAddToCart = (item, note = '') => {
     playTapSound();
@@ -120,7 +211,7 @@ export default function CustomerView({
       setPromoMessage(`✓ Applied: ${found.description}`);
       playSuccessChime();
     } else {
-      setPromoMessage('Invalid or expired coupon code');
+      setPromoMessage(language === 'hi' ? 'अमान्य या समाप्त कूपन कोड' : 'Invalid or expired coupon code');
     }
   };
 
@@ -137,35 +228,846 @@ export default function CustomerView({
   };
 
   const completeOrderPlacement = (finalPaymentStatus) => {
-    const newOrderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (!customerName.trim()) {
+      setShowNameModal(true);
+      return;
+    }
+    const orderNum = Math.floor(1000 + Math.random() * 9000);
+    const newOrderId = `ORD-${orderNum}`;
+    const finalCustomerName = customerName.trim();
     const newOrder = {
       id: newOrderId,
-      customerName: customerName || 'Guest Diner',
+      orderNumber: orderNum,
+      customerName: finalCustomerName,
       table: activeTable,
-      phone: customerPhone || 'Unspecified',
+      phone: customerPhone.trim() || 'Walk-in',
       createdAt: new Date().toISOString(),
       status: 'received',
       statusLabel: 'Received by Kitchen',
-      items: cart,
-      orderNote: orderNote,
+      items: [...cart],
+      orderNote: orderNote.trim(),
       paymentMode: paymentMode === 'upi' ? 'UPI Instant QR' : 'Pay at Counter',
       paymentStatus: finalPaymentStatus,
       subtotal: cartSubtotal,
       tax: tax,
       discount: discountAmount,
       total: cartTotal,
-      progressPercent: 25
+      progressPercent: 20
     };
 
+    // 1. Local state update
     onPlaceOrder(newOrder);
+
+    // 2. Broadcast cross-tab instant sync to Counter POS & Admin!
+    broadcastSyncEvent(SYNC_EVENTS.NEW_ORDER, newOrder);
+
     setCart([]);
     setIsCartOpen(false);
     setShowUpiModal(false);
     playSuccessChime();
+
+    if (setActiveTab) {
+      setActiveTab('track');
+    }
   };
 
+  // Call Server action
+  const handleCallServer = () => {
+    playTapSound();
+    broadcastSyncEvent(SYNC_EVENTS.CALL_SERVER, {
+      table: activeTable,
+      customerName: customerName || 'Guest Diner',
+      timestamp: new Date().toLocaleTimeString()
+    });
+    setServerCalledAlert(true);
+    playSuccessChime();
+    setTimeout(() => setServerCalledAlert(false), 5000);
+  };
+
+  // Dynamic UPI Deep Link URL for native mobile apps (GPay, PhonePe, Paytm, CRED)
+  const upiVpa = 'advaitkitchen@icici';
+  const upiPayUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(theme.restaurantName || 'Advait Kitchen')}&am=${cartTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`${activeTable} Order`)}`;
+  const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiPayUrl)}`;
+
+  // Mandatory Diner Name Pop-up Modal Component
+  const renderNameModal = () => {
+    if (!showNameModal) return null;
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(15, 23, 42, 0.75)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16
+        }}
+      >
+        <div
+          className="ios-card"
+          style={{
+            width: '100%',
+            maxWidth: 400,
+            background: '#FFFFFF',
+            borderRadius: 24,
+            padding: '24px 20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+            position: 'relative'
+          }}
+        >
+          {/* Modal Header */}
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #007AFF 0%, #0056B3 100%)',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 12px',
+                boxShadow: '0 6px 14px rgba(0, 122, 255, 0.3)'
+              }}
+            >
+              <Utensils size={24} />
+            </div>
+
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                padding: '3px 10px',
+                borderRadius: 20,
+                marginBottom: 8
+              }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#1D4ED8' }}>{activeTable}</span>
+              <span style={{ fontSize: 11, color: '#93C5FD' }}>•</span>
+              <span style={{ fontSize: 11, color: '#1E40AF' }}>{theme.restaurantName || 'Artisanal Kitchen'}</span>
+            </div>
+
+            <h2 style={{ fontSize: 19, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: -0.5 }}>
+              {language === 'hi' ? 'स्वागत है! अपना नाम दर्ज करें' : 'Welcome! Enter Your Name'}
+            </h2>
+            <p style={{ fontSize: 12, color: '#6B7280', marginTop: 4, marginBottom: 0 }}>
+              {language === 'hi'
+                ? 'टेबल से सीधे ऑर्डर करने और किचन टिकट के लिए नाम अनिवार्य है।'
+                : 'Please enter your name to browse dishes and place orders for your table.'}
+            </p>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSaveDinerName}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
+                {language === 'hi' ? 'आपका नाम (अनिवार्य) *' : 'Your Name (Required) *'}
+              </label>
+              <input
+                type="text"
+                autoFocus
+                className="ios-input"
+                style={{
+                  fontSize: 15,
+                  padding: '12px 14px',
+                  borderColor: nameError ? '#EF4444' : '#D1D5DB'
+                }}
+                placeholder={language === 'hi' ? 'उदा. आरव शर्मा / राहुल' : 'e.g. Aarav Sharma'}
+                value={customerNameInput}
+                onChange={(e) => {
+                  setCustomerNameInput(e.target.value);
+                  if (nameError) setNameError('');
+                }}
+              />
+              {nameError && (
+                <div style={{ fontSize: 11, color: '#DC2626', fontWeight: 600, marginTop: 4 }}>
+                  {nameError}
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#4B5563', marginBottom: 6 }}>
+                {language === 'hi' ? 'मोबाइल नंबर (वैकल्पिक - बिल रसीद हेतु)' : 'Phone Number (Optional - for digital bill)'}
+              </label>
+              <input
+                type="tel"
+                className="ios-input"
+                style={{ fontSize: 14, padding: '10px 14px' }}
+                placeholder="+91 98765 43210"
+                value={customerPhoneInput}
+                onChange={(e) => setCustomerPhoneInput(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn-primary-pill full-width"
+              style={{ padding: '12px 16px', fontSize: 14, fontWeight: 700 }}
+            >
+              <span>{language === 'hi' ? 'मेनू देखें व ऑर्डर शुरू करें' : 'Continue to Menu & Order'}</span>
+              <ArrowRight size={16} />
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  // VIEW 1: LIVE ORDER TRACKING TAB (FR-C6)
+  if (activeTab === 'track') {
+    return (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 95 }}>
+        {renderNameModal()}
+        <div style={{ marginBottom: 14 }}>
+          <div className="screen-title">{t('liveOrderTracking')}</div>
+          <div className="screen-subtitle">
+            {language === 'hi'
+              ? `${activeTable} के लिए लाइव रसोई प्रगति`
+              : `Real-time kitchen ticket progress for ${activeTable}`}
+          </div>
+        </div>
+
+        {serverCalledAlert && (
+          <div
+            style={{
+              background: '#DCFCE7',
+              border: '1px solid #86EFAC',
+              borderRadius: 14,
+              padding: '12px 14px',
+              color: '#15803D',
+              fontSize: 13,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 14
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>{t('serverCalled')}</span>
+          </div>
+        )}
+
+        {activeCustomerOrder ? (
+          <div className="ios-card active-gradient" style={{ padding: '16px', marginBottom: 16 }}>
+            {/* Header row */}
+            <div className="card-top-row" style={{ marginBottom: 10 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="card-heading" style={{ fontSize: 18 }}>
+                    {activeCustomerOrder.id}
+                  </span>
+                  <span className="status-pill tag" style={{ fontSize: 11 }}>{activeCustomerOrder.table}</span>
+                </div>
+                <div className="card-meta-text" style={{ marginTop: 2 }}>
+                  Diner: <strong>{activeCustomerOrder.customerName}</strong> • {new Date(activeCustomerOrder.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'right' }}>
+                <span
+                  className={`status-pill ${
+                    activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done'
+                      ? 'done'
+                      : activeCustomerOrder.status === 'rejected'
+                      ? 'pending'
+                      : 'progress'
+                  }`}
+                  style={{ fontSize: 12, padding: '4px 10px' }}
+                >
+                  {activeCustomerOrder.status === 'received'
+                    ? t('statusReceived')
+                    : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
+                    ? t('statusCooking')
+                    : activeCustomerOrder.status === 'ready'
+                    ? t('statusReady')
+                    : (activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done')
+                    ? t('statusServed')
+                    : t('statusRejected')}
+                </span>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--primary-blue)', marginTop: 4 }}>
+                  ₹{activeCustomerOrder.total.toFixed(0)}
+                </div>
+              </div>
+            </div>
+
+            {/* 4-Step Status Progress Tracker: Received -> Cooking -> Ready -> Served */}
+            <div style={{ margin: '18px 0 14px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', marginBottom: 8 }}>
+                {/* Connecting track line */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    left: 20,
+                    right: 20,
+                    height: 3,
+                    background: '#E5E7EB',
+                    zIndex: 1
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      background: activeCustomerOrder.status === 'rejected' ? '#DC2626' : '#007AFF',
+                      width:
+                        activeCustomerOrder.status === 'received'
+                          ? '12%'
+                          : (activeCustomerOrder.status === 'cooking' || activeCustomerOrder.status === 'in-progress')
+                          ? '42%'
+                          : activeCustomerOrder.status === 'ready'
+                          ? '75%'
+                          : '100%',
+                      transition: 'width 0.4s ease'
+                    }}
+                  />
+                </div>
+
+                {[
+                  { step: 'received', label: language === 'hi' ? 'प्राप्त' : 'Received' },
+                  { step: 'cooking', label: language === 'hi' ? 'पक रहा है' : 'Cooking' },
+                  { step: 'ready', label: language === 'hi' ? 'तैयार' : 'Ready' },
+                  { step: 'served', label: language === 'hi' ? 'परोसा गया' : 'Served' }
+                ].map((s, idx) => {
+                  const statusOrder = ['received', 'cooking', 'ready', 'served'];
+                  const normalizedStatus =
+                    activeCustomerOrder.status === 'in-progress'
+                      ? 'cooking'
+                      : activeCustomerOrder.status === 'done'
+                      ? 'served'
+                      : activeCustomerOrder.status;
+                  const currentIndex = statusOrder.indexOf(normalizedStatus);
+                  const isPassed = currentIndex >= idx;
+                  const isCurrent = currentIndex === idx;
+
+                  return (
+                    <div
+                      key={s.step}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        zIndex: 2,
+                        width: 70
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 26,
+                          height: 26,
+                          borderRadius: '50%',
+                          background: isPassed ? '#007AFF' : '#FFFFFF',
+                          border: isPassed ? '2px solid #007AFF' : '2px solid #D1D5DB',
+                          color: isPassed ? '#FFFFFF' : '#9CA3AF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                          transform: isCurrent ? 'scale(1.15)' : 'none',
+                          transition: 'transform 0.2s ease'
+                        }}
+                      >
+                        {isPassed ? '✓' : idx + 1}
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: isPassed ? 700 : 500, color: isPassed ? 'var(--text-primary)' : '#9CA3AF' }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Served Celebration Alert */}
+            {(activeCustomerOrder.status === 'served' || activeCustomerOrder.status === 'done') && (
+              <div
+                style={{
+                  background: '#ECFDF5',
+                  border: '1.5px solid #10B981',
+                  borderRadius: 12,
+                  padding: '10px 14px',
+                  color: '#065F46',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 12
+                }}
+              >
+                <CheckCircle2 size={18} color="#10B981" />
+                <span>
+                  {language === 'hi'
+                    ? 'व्यंजन आपकी टेबल पर परोस दिए गए हैं! स्वादिष्ट भोजन का आनंद लें।'
+                    : 'All dishes served hot to your table! Enjoy your meal.'}
+                </span>
+              </div>
+            )}
+
+            {/* If order is rejected */}
+            {activeCustomerOrder.status === 'rejected' && (
+              <div
+                style={{
+                  background: '#FEE2E2',
+                  border: '1px solid #FCA5A5',
+                  padding: '10px 12px',
+                  borderRadius: 12,
+                  color: '#DC2626',
+                  fontSize: 12,
+                  marginBottom: 12
+                }}
+              >
+                ⚠️ {activeCustomerOrder.statusLabel || 'Order could not be accepted.'} Please contact the counterperson.
+              </div>
+            )}
+
+            {/* Ordered Items List */}
+            <div style={{ background: '#FFFFFF', borderRadius: 12, padding: '12px', marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                {language === 'hi' ? 'ऑर्डर किए गए व्यंजन:' : 'Items on this Ticket:'}
+              </div>
+              <ul className="body-subtask">
+                {activeCustomerOrder.items.map((item, idx) => (
+                  <li key={idx}>
+                    <strong>{item.quantity}x</strong> {item.name}
+                    {item.note && (
+                      <span style={{ color: '#D97706', fontStyle: 'italic', marginLeft: 6 }}>
+                        [{item.note}]
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {activeCustomerOrder.orderNote && (
+                <div style={{ fontSize: 11, color: '#D97706', fontStyle: 'italic', marginTop: 6, borderTop: '1px dashed #E5E7EB', paddingTop: 6 }}>
+                  📝 Note: "{activeCustomerOrder.orderNote}"
+                </div>
+              )}
+            </div>
+
+            {/* Payment badge row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <span className="status-pill tag">{activeCustomerOrder.paymentMode}</span>
+              <span className="card-meta-text">{activeCustomerOrder.paymentStatus}</span>
+            </div>
+
+            {/* Action buttons */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button
+                className="btn-secondary-pill"
+                style={{ padding: '8px 12px', fontSize: 12 }}
+                onClick={handleCallServer}
+              >
+                <Bell size={13} color="#D97706" />
+                <span>{t('callServer')}</span>
+              </button>
+
+              <button
+                className="btn-primary-pill"
+                style={{ padding: '8px 12px', fontSize: 12 }}
+                onClick={() => {
+                  playTapSound();
+                  if (setActiveTab) setActiveTab('menu');
+                }}
+              >
+                <Plus size={14} />
+                <span>{t('orderMoreItems')}</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+            <Clock size={36} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+            <div style={{ fontSize: 15, fontWeight: 600 }}>
+              {language === 'hi' ? 'कोई सक्रिय ऑर्डर नहीं है' : 'No Active Order for this Table'}
+            </div>
+            <div style={{ fontSize: 12, marginTop: 4, marginBottom: 16 }}>
+              {language === 'hi'
+                ? 'स्वादिष्ट व्यंजनों का आनंद लेने के लिए मेनू से ऑर्डर करें।'
+                : 'Browse our artisanal menu and tap dishes to place your order.'}
+            </div>
+            <button
+              className="btn-primary-pill"
+              onClick={() => {
+                playTapSound();
+                if (setActiveTab) setActiveTab('menu');
+              }}
+            >
+              {language === 'hi' ? 'मेनू देखें' : 'Browse Menu'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // VIEW 2: CART / TRAY VIEW (When user clicks on cart bottom tab or floating bar)
+  if (activeTab === 'cart' || isCartOpen) {
+    return (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 95 }}>
+        {renderNameModal()}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <div className="screen-title">{t('yourOrderTray')}</div>
+            <div className="screen-subtitle">{t('freshlyPreparedFor')} {activeTable}</div>
+          </div>
+          {isCartOpen && (
+            <button
+              className="nav-icon-btn"
+              onClick={() => setIsCartOpen(false)}
+              aria-label="Close Tray"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+
+        {cart.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+            <ShoppingBag size={40} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{t('emptyCart')}</div>
+            <div style={{ marginTop: 14 }}>
+              <button
+                className="btn-primary-pill"
+                onClick={() => {
+                  playTapSound();
+                  setIsCartOpen(false);
+                  if (setActiveTab) setActiveTab('menu');
+                }}
+              >
+                {language === 'hi' ? 'मेनू पर जाएं' : 'Browse Menu'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* Cart Items List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              {cart.map((cartItem, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px 12px',
+                    background: '#F9FAFB',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: 14
+                  }}
+                >
+                  <div style={{ flex: 1, paddingRight: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {cartItem.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--primary-blue)', fontWeight: 600 }}>
+                      ₹{(cartItem.price * cartItem.quantity).toFixed(0)}
+                    </div>
+                    {cartItem.note && (
+                      <div style={{ fontSize: 11, color: '#D97706', fontStyle: 'italic', marginTop: 2 }}>
+                        Note: "{cartItem.note}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      className="nav-icon-btn"
+                      style={{ width: 28, height: 28 }}
+                      onClick={() => handleUpdateQuantity(idx, -1)}
+                    >
+                      <Minus size={13} />
+                    </button>
+                    <span style={{ fontSize: 14, fontWeight: 700, minWidth: 16, textAlign: 'center' }}>
+                      {cartItem.quantity}
+                    </span>
+                    <button
+                      className="nav-icon-btn"
+                      style={{ width: 28, height: 28 }}
+                      onClick={() => handleUpdateQuantity(idx, 1)}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Overall Order Note (FR-C4) */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                {t('kitchenServiceNote')}
+              </label>
+              <input
+                type="text"
+                className="ios-input"
+                placeholder={t('kitchenNotePlaceholder')}
+                value={orderNote}
+                onChange={(e) => setOrderNote(e.target.value)}
+              />
+            </div>
+
+            {/* Coupon Code (FR-P5) */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                {t('couponCode')}
+              </label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="text"
+                  className="ios-input"
+                  placeholder={t('couponPlaceholder')}
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value)}
+                />
+                <button className="btn-secondary-pill" onClick={handleApplyPromo}>
+                  {t('apply')}
+                </button>
+              </div>
+              {promoMessage && (
+                <div style={{ fontSize: 11, marginTop: 4, color: appliedPromo ? '#16A34A' : '#EF4444' }}>
+                  {promoMessage}
+                </div>
+              )}
+            </div>
+
+            {/* Diner Name (FR-C5: Customer enters name or table number, phone optional) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                  {t('yourName')} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="ios-input"
+                  placeholder={t('namePlaceholder')}
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                  {t('phoneNumber')}
+                </label>
+                <input
+                  type="tel"
+                  className="ios-input"
+                  placeholder={t('phonePlaceholder')}
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Payment Mode Selector (FR-C7: Pay at counter by default, optional UPI) */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
+                {t('paymentMethod')}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button
+                  type="button"
+                  className="ios-card"
+                  style={{
+                    padding: '12px 10px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    border: paymentMode === 'counter' ? '2px solid #007AFF' : '1px solid #E5E7EB',
+                    background: paymentMode === 'counter' ? '#EFF6FF' : '#FFFFFF'
+                  }}
+                  onClick={() => setPaymentMode('counter')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <CreditCard size={14} color="#007AFF" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{t('payAtCounter')}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('payAtCounterDesc')}</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="ios-card"
+                  style={{
+                    padding: '12px 10px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    border: paymentMode === 'upi' ? '2px solid #007AFF' : '1px solid #E5E7EB',
+                    background: paymentMode === 'upi' ? '#EFF6FF' : '#FFFFFF'
+                  }}
+                  onClick={() => setPaymentMode('upi')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <QrCode size={14} color="#8B5CF6" />
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{t('instantUpi')}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('instantUpiDesc')}</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Price Breakdown */}
+            <div
+              style={{
+                background: '#F9FAFB',
+                padding: 12,
+                borderRadius: 14,
+                marginBottom: 16,
+                fontSize: 13
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ color: 'var(--text-muted)' }}>{t('subtotal')}</span>
+                <span>₹{cartSubtotal.toFixed(0)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ color: 'var(--text-muted)' }}>{t('gstTax')}</span>
+                <span>₹{tax.toFixed(1)}</span>
+              </div>
+              {discountAmount > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#16A34A' }}>
+                  <span>{t('discount')} ({appliedPromo.code})</span>
+                  <span>-₹{discountAmount.toFixed(0)}</span>
+                </div>
+              )}
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontWeight: 700,
+                  fontSize: 16,
+                  borderTop: '1px solid #E5E7EB',
+                  paddingTop: 6,
+                  marginTop: 6
+                }}
+              >
+                <span>{t('totalDue')}</span>
+                <span style={{ color: 'var(--primary-blue)' }}>₹{cartTotal.toFixed(0)}</span>
+              </div>
+            </div>
+
+            {/* Confirm & Send to Kitchen Button */}
+            <button
+              className="btn-primary-pill full-width"
+              onClick={handleCheckoutSubmit}
+              disabled={cart.length === 0}
+            >
+              <CheckCircle2 size={18} />
+              <span>{t('confirmOrder')} (₹{cartTotal.toFixed(0)})</span>
+            </button>
+          </div>
+        )}
+
+        {/* UPI QR & Deep Link Payment Modal (FR-C7) */}
+        {showUpiModal && (
+          <div className="modal-overlay" onClick={() => setShowUpiModal(false)}>
+            <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-drag-pill" />
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <div className="card-heading" style={{ fontSize: 19 }}>
+                  {language === 'hi' ? 'तत्काल यूपीआई भुगतान' : 'Instant UPI Payment'}
+                </div>
+                <div className="card-meta-text">
+                  Google Pay • PhonePe • Paytm • CRED • BHIM
+                </div>
+              </div>
+
+              {/* Dynamic QR Code Display for the amount (FR-C7) */}
+              <div
+                style={{
+                  width: 210,
+                  height: 210,
+                  background: '#FFFFFF',
+                  border: '3px solid #111827',
+                  borderRadius: 18,
+                  margin: '0 auto 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+                  padding: 8
+                }}
+              >
+                <img
+                  src={qrCodeApiUrl}
+                  alt={`UPI QR for ₹${cartTotal.toFixed(0)}`}
+                  style={{ width: 170, height: 170, objectFit: 'contain' }}
+                  onError={(e) => {
+                    // Fallback to internal vector icon if external QR fails
+                    e.target.style.display = 'none';
+                  }}
+                />
+                <div style={{ fontSize: 13, fontWeight: 700, marginTop: 4, color: '#007AFF' }}>
+                  ₹{cartTotal.toFixed(0)}
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+                UPI ID: <strong>{upiVpa}</strong>
+                <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
+                  Payee: {theme.restaurantName} • Table: {activeTable}
+                </div>
+              </div>
+
+              {/* UPI Deep Link Button for mobile devices (FR-C7) */}
+              <a
+                href={upiPayUrl}
+                className="btn-primary-pill full-width"
+                style={{
+                  background: '#8B5CF6',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  marginBottom: 8
+                }}
+              >
+                <ArrowRight size={16} />
+                <span>Open in GPay / PhonePe App</span>
+              </a>
+
+              <button
+                className="btn-primary-pill full-width"
+                style={{ background: '#16A34A', marginBottom: 8 }}
+                onClick={() => {
+                  completeOrderPlacement('Paid via UPI QR (Verified)');
+                }}
+              >
+                <CheckCircle2 size={16} />
+                <span>Confirm Payment Completed</span>
+              </button>
+
+              <button
+                className="btn-secondary-pill full-width"
+                onClick={() => setShowUpiModal(false)}
+              >
+                Cancel / Return to Tray
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // VIEW 3: MAIN MENU BROWSING (DEFAULT GUEST DINE-IN EXPERIENCE)
+  // -------------------------------------------------------------
   return (
-    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 85 }}>
+    <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 95 }}>
       {/* Verified Chef Callout Header Banner */}
       <div
         className="chef-verified-banner"
@@ -173,44 +1075,81 @@ export default function CustomerView({
           playTapSound();
           onGoToChef();
         }}
-        title="Tap to verify Executive Chef credentials"
+        title="Tap to verify Executive Chef credentials & FSSAI audit"
       >
         <div className="chef-banner-left">
           <img src={chef.portrait} alt={chef.name} className="chef-banner-avatar" />
           <div className="chef-banner-text">
             <div className="chef-banner-title">
-              <span>Verified Chef {chef.name}</span>
+              <span>{t('verifiedChef')} {chef.name}</span>
               <ShieldCheck size={14} color="#007AFF" />
             </div>
             <div className="chef-banner-subtitle">
-              FSSAI 5-Star Clean Dining • 18+ Yrs Mastery
+              {t('fssaiBadge')} • 18+ Yrs Mastery
             </div>
           </div>
         </div>
         <div className="chef-banner-action">
-          <span>Verify</span>
+          <span>{language === 'hi' ? 'देखें' : 'Verify'}</span>
           <ChevronRight size={12} />
         </div>
       </div>
 
-      {/* Screen Title & Welcome */}
-      <div style={{ padding: '12px 18px 4px' }}>
-        <div className="screen-title">{theme.restaurantName}</div>
-        <div className="screen-subtitle">{theme.welcomeMessage}</div>
+      {/* Screen Title & Welcome with Diner Name Pill */}
+      <div style={{ padding: '12px 18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+        <div>
+          <div className="screen-title">{theme.restaurantName}</div>
+          <div className="screen-subtitle">
+            {language === 'hi'
+              ? `${activeTable} पर आपका स्वागत है। मेनू देखें और तुरंत ऑर्डर करें।`
+              : (theme.welcomeMessage || `Welcome to ${activeTable}! Order fresh dishes directly to your table.`)}
+          </div>
+        </div>
+
+        {customerName && (
+          <button
+            onClick={() => {
+              playTapSound();
+              setCustomerNameInput(customerName);
+              setCustomerPhoneInput(customerPhone);
+              setShowNameModal(true);
+            }}
+            style={{
+              background: '#F0FDF4',
+              border: '1px solid #BBF7D0',
+              borderRadius: 20,
+              padding: '5px 10px',
+              fontSize: 11,
+              fontWeight: 700,
+              color: '#15803D',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer',
+              flexShrink: 0,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}
+            title="Diner Name (Tap to edit)"
+          >
+            <User size={12} color="#15803D" />
+            <span>{customerName}</span>
+            <Edit2 size={10} color="#15803D" />
+          </button>
+        )}
       </div>
 
       {/* Filter / Sub-Nav Tabs (Strict Design System Specification) */}
       <div className="filter-tabs-container">
-        {categories.map((cat) => (
+        {categoryKeys.map((cat) => (
           <button
-            key={cat}
-            className={`capsule-tab ${selectedCategory === cat ? 'active' : ''}`}
+            key={cat.id}
+            className={`capsule-tab ${selectedCategory === cat.id ? 'active' : ''}`}
             onClick={() => {
               playTapSound();
-              setSelectedCategory(cat);
+              setSelectedCategory(cat.id);
             }}
           >
-            {cat}
+            {cat.label}
           </button>
         ))}
 
@@ -229,14 +1168,21 @@ export default function CustomerView({
           }}
         >
           <span className="veg-badge" />
-          <span>Pure Veg Only</span>
+          <span>{t('pureVegOnly')}</span>
         </button>
       </div>
 
-      {/* Active Live Tracking Card (If customer has placed an active order) */}
-      {activeCustomerOrder && activeCustomerOrder.status !== 'done' && (
+      {/* Active Live Tracking Notification Card (if table has an order in kitchen) */}
+      {activeCustomerOrder && activeCustomerOrder.status !== 'done' && activeCustomerOrder.status !== 'served' && (
         <div style={{ padding: '0 16px', marginBottom: 12 }}>
-          <div className="ios-card active-gradient" style={{ padding: '12px 14px' }}>
+          <div
+            className="ios-card active-gradient"
+            style={{ padding: '12px 14px', cursor: 'pointer' }}
+            onClick={() => {
+              playTapSound();
+              if (setActiveTab) setActiveTab('track');
+            }}
+          >
             <div className="card-top-row" style={{ marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span className="status-pill progress" style={{ fontSize: 11 }}>
@@ -246,14 +1192,13 @@ export default function CustomerView({
                   {activeCustomerOrder.id}
                 </span>
               </div>
-              <span className="card-meta-text">{activeCustomerOrder.table}</span>
+              <span className="card-meta-text">{activeCustomerOrder.table} • Tap to Track</span>
             </div>
 
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
               • {activeCustomerOrder.items.map((i) => `${i.quantity}x ${i.name}`).join(', ')}
             </div>
 
-            {/* Bottom Progress Bar */}
             <div className="card-bottom-progress">
               <div
                 className="card-bottom-progress-fill progress"
@@ -268,7 +1213,7 @@ export default function CustomerView({
       <div className="menu-items-grid">
         {filteredMenu.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-            No culinary items found matching your filters.
+            {language === 'hi' ? 'कोई व्यंजन नहीं मिला।' : 'No culinary items found matching your filters.'}
           </div>
         ) : (
           filteredMenu.map((item) => (
@@ -318,12 +1263,14 @@ export default function CustomerView({
                       ₹{item.price.toFixed(0)}
                     </div>
 
-                    {/* Bullet point list conforming strictly to design system */}
-                    <ul className="body-subtask">
-                      {item.bullets.map((bullet, idx) => (
-                        <li key={idx}>{bullet}</li>
-                      ))}
-                    </ul>
+                    {/* Bullet point list describing item */}
+                    {item.bullets && item.bullets.length > 0 && (
+                      <ul className="body-subtask">
+                        {item.bullets.map((bullet, idx) => (
+                          <li key={idx}>{bullet}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
 
                   {/* Badges and Actions */}
@@ -336,7 +1283,7 @@ export default function CustomerView({
                     }}
                   >
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {item.tags.map((tag, idx) => (
+                      {item.tags && item.tags.map((tag, idx) => (
                         <span key={idx} className="status-pill tag" style={{ fontSize: 10, padding: '2px 8px' }}>
                           {tag}
                         </span>
@@ -344,7 +1291,7 @@ export default function CustomerView({
                     </div>
 
                     {item.isAvailable ? (
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <button
                           className="btn-secondary-pill"
                           style={{ padding: '6px 10px', fontSize: 12 }}
@@ -353,23 +1300,88 @@ export default function CustomerView({
                             setCustomizingItem(item);
                             setItemNoteInput('');
                           }}
-                          title="Add special culinary instructions"
+                          title={t('customNotes')}
+                          aria-label="Add instructions"
                         >
                           <MessageSquare size={13} />
                         </button>
 
-                        <button
-                          className="btn-primary-pill"
-                          style={{ padding: '6px 14px', fontSize: 13 }}
-                          onClick={() => handleAddToCart(item)}
-                        >
-                          <Plus size={14} />
-                          <span>Add</span>
-                        </button>
+                        {cart.filter((ci) => ci.id === item.id).reduce((s, ci) => s + ci.quantity, 0) === 0 ? (
+                          <button
+                            className="btn-primary-pill"
+                            style={{ padding: '6px 16px', fontSize: 13, fontWeight: 700 }}
+                            onClick={() => handleAddToCart(item)}
+                          >
+                            <Plus size={14} />
+                            <span>{t('add')}</span>
+                          </button>
+                        ) : (
+                          <div
+                            className="menu-qty-stepper"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              background: 'var(--primary-blue)',
+                              borderRadius: 20,
+                              padding: '2px 4px',
+                              color: '#FFFFFF',
+                              boxShadow: '0 2px 6px rgba(0, 122, 255, 0.3)'
+                            }}
+                          >
+                            <button
+                              onClick={() => handleDecreaseItemQty(item.id)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              aria-label="Decrease quantity"
+                              title="Decrease quantity"
+                            >
+                              <Minus size={13} strokeWidth={2.8} />
+                            </button>
+
+                            <span
+                              style={{
+                                minWidth: 20,
+                                textAlign: 'center',
+                                fontWeight: 800,
+                                fontSize: 13,
+                                padding: '0 2px',
+                                userSelect: 'none'
+                              }}
+                            >
+                              {cart.filter((ci) => ci.id === item.id).reduce((s, ci) => s + ci.quantity, 0)}
+                            </span>
+
+                            <button
+                              onClick={() => handleAddToCart(item)}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#FFFFFF',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}
+                              aria-label="Increase quantity"
+                              title="Increase quantity"
+                            >
+                              <Plus size={13} strokeWidth={2.8} />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <span className="status-pill pending" style={{ fontSize: 11 }}>
-                        Sold Out
+                        {t('soldOut')}
                       </span>
                     )}
                   </div>
@@ -394,7 +1406,7 @@ export default function CustomerView({
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Sparkles size={14} color="#007AFF" />
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-blue)' }}>
-                  Chef's Recommended Pairing
+                  {t('chefPairing')}
                 </span>
               </div>
               <span className="status-pill tag" style={{ fontSize: 9 }}>+ Add-On</span>
@@ -415,14 +1427,67 @@ export default function CustomerView({
                 </div>
               </div>
 
-              <button
-                className="btn-primary-pill"
-                style={{ padding: '6px 14px', fontSize: 12 }}
-                onClick={() => handleAddToCart(suggestableItem, 'Chef Recommended Pairing')}
-              >
-                <Plus size={13} />
-                <span>Add Pairing</span>
-              </button>
+              {(() => {
+                const sugQty = cart.filter((ci) => ci.id === suggestableItem.id).reduce((s, ci) => s + ci.quantity, 0);
+                if (sugQty === 0) {
+                  return (
+                    <button
+                      className="btn-primary-pill"
+                      style={{ padding: '6px 14px', fontSize: 12 }}
+                      onClick={() => handleAddToCart(suggestableItem, 'Chef Recommended Pairing')}
+                    >
+                      <Plus size={13} />
+                      <span>{t('addPairing')}</span>
+                    </button>
+                  );
+                }
+                return (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      background: 'var(--primary-blue)',
+                      borderRadius: 18,
+                      padding: '2px 4px',
+                      color: '#FFFFFF'
+                    }}
+                  >
+                    <button
+                      onClick={() => handleDecreaseItemQty(suggestableItem.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        padding: '3px 6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus size={12} strokeWidth={2.8} />
+                    </button>
+                    <span style={{ minWidth: 16, textAlign: 'center', fontWeight: 800, fontSize: 12 }}>
+                      {sugQty}
+                    </span>
+                    <button
+                      onClick={() => handleAddToCart(suggestableItem, 'Chef Recommended Pairing')}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        padding: '3px 6px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      aria-label="Increase quantity"
+                    >
+                      <Plus size={12} strokeWidth={2.8} />
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -455,8 +1520,8 @@ export default function CustomerView({
               {totalItemCount}
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>View Order Tray</div>
-              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{activeTable} • Dine-in</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{t('viewTray')}</div>
+              <div style={{ fontSize: 11, color: '#9CA3AF' }}>{activeTable} • {t('dineIn')}</div>
             </div>
           </div>
 
@@ -473,16 +1538,18 @@ export default function CustomerView({
           <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="modal-drag-pill" />
             <div className="card-heading" style={{ marginBottom: 4 }}>
-              Special Notes: {customizingItem.name}
+              {t('customNotes')}: {customizingItem.name}
             </div>
             <div className="card-meta-text" style={{ marginBottom: 14 }}>
-              Chef will prepare according to your dietary preference.
+              {language === 'hi'
+                ? 'शेफ आपके स्वाद और प्राथमिकता के अनुसार तैयार करेंगे।'
+                : 'Chef will prepare according to your dietary instructions.'}
             </div>
 
             <textarea
               className="ios-input"
               rows={3}
-              placeholder="e.g. Less spicy, Jain preparation, no onions, extra crisp..."
+              placeholder={t('customNotesPlaceholder')}
               value={itemNoteInput}
               onChange={(e) => setItemNoteInput(e.target.value)}
               style={{ resize: 'none', marginBottom: 16 }}
@@ -497,300 +1564,48 @@ export default function CustomerView({
               }}
             >
               <Plus size={16} />
-              <span>Add to Tray with Note</span>
+              <span>{t('addToTrayWithNote')}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Cart & Checkout Sheet (FR-C3, FR-C4, FR-C5, FR-C7) */}
-      {isCartOpen && (
-        <div className="modal-overlay" onClick={() => setIsCartOpen(false)}>
-          <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-drag-pill" />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div>
-                <div className="card-heading" style={{ fontSize: 20 }}>Your Order Tray</div>
-                <div className="card-meta-text">Prepared fresh for {activeTable}</div>
-              </div>
-              <button
-                className="nav-icon-btn"
-                onClick={() => setIsCartOpen(false)}
-                aria-label="Close Tray"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Cart Items List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              {cart.map((cartItem, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    background: '#F9FAFB',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: 14
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {cartItem.name}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--primary-blue)', fontWeight: 600 }}>
-                      ₹{(cartItem.price * cartItem.quantity).toFixed(0)}
-                    </div>
-                    {cartItem.note && (
-                      <div style={{ fontSize: 11, color: '#D97706', fontStyle: 'italic', marginTop: 2 }}>
-                        Note: "{cartItem.note}"
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button
-                      className="nav-icon-btn"
-                      style={{ width: 28, height: 28 }}
-                      onClick={() => handleUpdateQuantity(idx, -1)}
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <span style={{ fontSize: 14, fontWeight: 700, minWidth: 16, textAlign: 'center' }}>
-                      {cartItem.quantity}
-                    </span>
-                    <button
-                      className="nav-icon-btn"
-                      style={{ width: 28, height: 28 }}
-                      onClick={() => handleUpdateQuantity(idx, 1)}
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Overall Order Note (FR-C4) */}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                Kitchen & Service Note
-              </label>
-              <input
-                type="text"
-                className="ios-input"
-                placeholder="e.g. Serve shikanji first, extra napkins, less green chilli..."
-                value={orderNote}
-                onChange={(e) => setOrderNote(e.target.value)}
-              />
-            </div>
-
-            {/* Promo / Discount Code (FR-P5) */}
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                Have a Coupon Code? (Try "ADVAIT10" or "FLAT100")
-              </label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  type="text"
-                  className="ios-input"
-                  placeholder="Enter coupon code"
-                  value={promoInput}
-                  onChange={(e) => setPromoInput(e.target.value)}
-                />
-                <button className="btn-secondary-pill" onClick={handleApplyPromo}>
-                  Apply
-                </button>
-              </div>
-              {promoMessage && (
-                <div style={{ fontSize: 11, marginTop: 4, color: appliedPromo ? '#16A34A' : '#EF4444' }}>
-                  {promoMessage}
-                </div>
-              )}
-            </div>
-
-            {/* Diner Info (FR-C5) */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                  Your Name
-                </label>
-                <input
-                  type="text"
-                  className="ios-input"
-                  placeholder="e.g. Rohan"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                  Phone Number
-                </label>
-                <input
-                  type="text"
-                  className="ios-input"
-                  placeholder="+91 98..."
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Payment Mode Selector (FR-C7) */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>
-                Payment Method
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button
-                  type="button"
-                  className="ios-card"
-                  style={{
-                    padding: '10px',
-                    cursor: 'pointer',
-                    border: paymentMode === 'counter' ? '2px solid #007AFF' : '1px solid #E5E7EB',
-                    background: paymentMode === 'counter' ? '#EFF6FF' : '#FFFFFF'
-                  }}
-                  onClick={() => setPaymentMode('counter')}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Pay at Counter</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Default (Cash or Card)</div>
-                </button>
-
-                <button
-                  type="button"
-                  className="ios-card"
-                  style={{
-                    padding: '10px',
-                    cursor: 'pointer',
-                    border: paymentMode === 'upi' ? '2px solid #007AFF' : '1px solid #E5E7EB',
-                    background: paymentMode === 'upi' ? '#EFF6FF' : '#FFFFFF'
-                  }}
-                  onClick={() => setPaymentMode('upi')}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>Instant UPI QR</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>GPay / PhonePe / Paytm</div>
-                </button>
-              </div>
-            </div>
-
-            {/* Price Breakdown */}
-            <div
-              style={{
-                background: '#F9FAFB',
-                padding: 12,
-                borderRadius: 14,
-                marginBottom: 16,
-                fontSize: 13
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Subtotal</span>
-                <span>₹{cartSubtotal.toFixed(0)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ color: 'var(--text-muted)' }}>GST (5% • 2.5% CGST + 2.5% SGST)</span>
-                <span>₹{tax.toFixed(1)}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, color: '#16A34A' }}>
-                  <span>Discount ({appliedPromo.code})</span>
-                  <span>-₹{discountAmount.toFixed(0)}</span>
-                </div>
-              )}
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontWeight: 700,
-                  fontSize: 16,
-                  borderTop: '1px solid #E5E7EB',
-                  paddingTop: 6,
-                  marginTop: 6
-                }}
-              >
-                <span>Total Due</span>
-                <span style={{ color: 'var(--primary-blue)' }}>₹{cartTotal.toFixed(0)}</span>
-              </div>
-            </div>
-
-            {/* Primary Order CTA */}
-            <button
-              className="btn-primary-pill full-width"
-              onClick={handleCheckoutSubmit}
-              disabled={cart.length === 0}
-            >
-              <CheckCircle2 size={18} />
-              <span>Confirm Order & Send to Kitchen (₹{cartTotal.toFixed(0)})</span>
-            </button>
-          </div>
+      {/* Customer Footer - Strictly Zero Staff Login UI */}
+      <footer
+        style={{
+          marginTop: 32,
+          padding: '24px 16px',
+          textAlign: 'center',
+          borderTop: '1px solid #E5E7EB',
+          color: 'var(--text-muted)',
+          fontSize: 11
+        }}
+      >
+        <div
+          style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, userSelect: 'none' }}
+          onClick={() => {
+            // Invisible floor supervisor bypass: tap 5 times to open terminal prompt
+            secretTapCount.current += 1;
+            if (secretTapTimer.current) clearTimeout(secretTapTimer.current);
+            secretTapTimer.current = setTimeout(() => {
+              secretTapCount.current = 0;
+            }, 1800);
+            if (secretTapCount.current >= 5) {
+              secretTapCount.current = 0;
+              playTapSound();
+              if (onOpenStaffPortal) onOpenStaffPortal();
+            }
+          }}
+        >
+          {theme.restaurantName} • FSSAI Lic #10026011009821
         </div>
-      )}
-
-      {/* UPI QR Display Modal (FR-C7) */}
-      {showUpiModal && (
-        <div className="modal-overlay" onClick={() => setShowUpiModal(false)}>
-          <div className="modal-content-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-drag-pill" />
-            <div style={{ textAlign: 'center', marginBottom: 14 }}>
-              <div className="card-heading" style={{ fontSize: 19 }}>Instant UPI QR Payment</div>
-              <div className="card-meta-text">Scan with Google Pay, PhonePe, Paytm, CRED or BHIM</div>
-            </div>
-
-            {/* Simulated UPI QR Code Frame */}
-            <div
-              style={{
-                width: 190,
-                height: 190,
-                background: '#FFFFFF',
-                border: '3px solid #111827',
-                borderRadius: 18,
-                margin: '0 auto 14px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
-              }}
-            >
-              <QrCode size={130} color="#111827" />
-              <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: '#007AFF' }}>
-                PAY: ₹{cartTotal.toFixed(0)}
-              </div>
-            </div>
-
-            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-              UPI VPA: <strong>advaitkitchen@icici</strong>
-              <div style={{ fontSize: 11, color: '#6B7280', marginTop: 2 }}>
-                Accepted Apps: GPay • PhonePe • Paytm • CRED • BHIM
-              </div>
-            </div>
-
-            <button
-              className="btn-primary-pill full-width"
-              style={{ background: '#16A34A', marginBottom: 8 }}
-              onClick={() => {
-                completeOrderPlacement('Paid via UPI QR (Verified)');
-              }}
-            >
-              <CheckCircle2 size={16} />
-              <span>Simulate Successful UPI Payment</span>
-            </button>
-
-            <button
-              className="btn-secondary-pill full-width"
-              onClick={() => setShowUpiModal(false)}
-            >
-              Back to Tray
-            </button>
-          </div>
+        <div>
+          Pure Contactless Table QR Ordering • Freshly Crafted & Served Hot
         </div>
-      )}
+      </footer>
+
+      {/* Mandatory Diner Name Pop-up Modal */}
+      {renderNameModal()}
     </div>
   );
 }

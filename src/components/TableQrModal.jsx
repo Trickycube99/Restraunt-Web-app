@@ -26,8 +26,6 @@ export default function TableQrModal({
   ],
   restaurantName = 'Advait Artisanal Indian Kitchen'
 }) {
-  if (!isOpen) return null;
-
   const [selectedTable, setSelectedTable] = useState(activeTable || 'Table 04');
   const [baseUrl, setBaseUrl] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -39,11 +37,12 @@ export default function TableQrModal({
   const [isCopied, setIsCopied] = useState(false);
 
   // Compute table number e.g. "04" from "Table 04"
-  const tableNum = selectedTable.replace(/\D/g, '').padStart(2, '0');
+  const tableNum = (selectedTable || 'Table 04').replace(/\D/g, '').padStart(2, '0');
   const directMenuUrl = `${baseUrl}/?table=${tableNum}#customer`;
 
   // Generate QR Code data URL whenever selectedTable or baseUrl changes
   useEffect(() => {
+    if (!isOpen) return;
     let isMounted = true;
     QRCode.toDataURL(
       directMenuUrl,
@@ -63,7 +62,9 @@ export default function TableQrModal({
       }
     );
     return () => { isMounted = false; };
-  }, [directMenuUrl]);
+  }, [directMenuUrl, isOpen]);
+
+  if (!isOpen) return null;
 
   const handleCopyLink = () => {
     playTapSound();

@@ -27,6 +27,7 @@ import {
   resetAllSessions
 } from './utils/auth';
 import { playNewOrderChime, playTapSound } from './utils/audio';
+import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
 import confetti from 'canvas-confetti';
 
 export default function App() {
@@ -40,20 +41,24 @@ export default function App() {
   const [theme, setTheme] = useState(() => loadData(STORAGE_KEYS.THEME, initialTheme));
   const [checklists, setChecklists] = useState(() => loadData(STORAGE_KEYS.CHECKLISTS, []));
 
-  // Authentication Abstraction State (Persisted across sessions)
+  // Authentication State
   const [authSessions, setAuthSessions] = useState(() => getStoredSessions());
   const [authModal, setAuthModal] = useState({ isOpen: false, targetRole: null });
   const [isTableQrOpen, setIsTableQrOpen] = useState(false);
 
-  // Cart State (Customer specific)
+  // Cart & Active Table State (Customer specific)
   const [cart, setCart] = useState([]);
   const [activeTable, setActiveTable] = useState('Table 04');
 
-  // Navigation State
+  // Navigation & View State
   const [currentRole, setCurrentRole] = useState('customer'); // 'customer' | 'chef' | 'counter' | 'kds' | 'admin'
-  const [activeTab, setActiveTab] = useState('menu'); // customer: 'menu','chef','cart','track' | counter: 'orders','manual','stock','checklist'
-  const [counterSubTab, setCounterSubTab] = useState('orders');
-  const [adminTab, setAdminTab] = useState('sales'); // owner admin active tab ('sales','orders','pnl','payroll','branding' in footer on mobile)
+  const [activeTab, setActiveTab] = useState('menu'); // customer: 'menu','cart','track','chef'
+  const [counterSubTab, setCounterSubTab] = useState('orders'); // counter: 'orders','manual','stock','checklist'
+  const [adminTab, setAdminTab] = useState('sales');
+
+  // Accessibility, Language & Audio Preferences
+  const [language, setLanguage] = useState('en'); // 'en' | 'hi' (PRD Section 7)
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,11 +73,42 @@ export default function App() {
   useEffect(() => { saveData(STORAGE_KEYS.THEME, theme); }, [theme]);
   useEffect(() => { saveData(STORAGE_KEYS.CHECKLISTS, checklists); }, [checklists]);
 
-  // URL Hash & Parameter Support with Authentication Guard
+  // Real-Time Cross-Tab / Cross-Device Synchronization Listener
+  useEffect(() => {
+    const unsubscribe = subscribeSyncEvents((msg) => {
+      if (!msg || !msg.type) return;
+
+      if (msg.type === SYNC_EVENTS.NEW_ORDER) {
+        setOrders((prev) => {
+          if (prev.some((o) => o.id === msg.payload.id)) return prev;
+          return [msg.payload, ...prev];
+        });
+        if (!isSoundMuted && (currentRole === 'counter' || currentRole === 'kds')) {
+          playNewOrderChime();
+        }
+      } else if (msg.type === SYNC_EVENTS.ORDER_STATUS_UPDATED) {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === msg.payload.id ? { ...o, ...msg.payload } : o))
+        );
+      } else if (msg.type === SYNC_EVENTS.MENU_UPDATED) {
+        setMenu(msg.payload);
+      } else if (msg.type === SYNC_EVENTS.OFFERS_UPDATED) {
+        setOffers(msg.payload);
+      } else if (msg.type === SYNC_EVENTS.EXPENSE_ADDED) {
+        setExpenses((prev) => [msg.payload, ...prev]);
+      } else if (msg.type === SYNC_EVENTS.CHECKLIST_SUBMITTED) {
+        setChecklists((prev) => [msg.payload, ...prev]);
+      }
+    });
+
+    return unsubscribe;
+  }, [currentRole, isSoundMuted]);
+
+  // URL Hash & Parameter Routing Guard
   useEffect(() => {
     const syncFromUrl = () => {
       const urlParams = new URLSearchParams(window.location.search);
-      const tableParam = urlParams.get('table');
+      const tableParam = urlParams.get('table') || urlParams.get('t');
       if (tableParam) {
         const cleanTable = tableParam.toLowerCase().startsWith('table')
           ? tableParam
@@ -82,23 +118,29 @@ export default function App() {
         setActiveTab('menu');
       }
 
-      const hash = window.location.hash.replace('#', '').toLowerCase();
+      const hash = window.location.hash.replace('#', '').replace('/', '').toLowerCase();
       let targetRole = null;
       if (hash === 'chef') targetRole = 'chef';
       else if (hash === 'counter' || hash === 'pos') targetRole = 'counter';
       else if (hash === 'kds' || hash === 'kitchen') targetRole = 'kds';
       else if (hash === 'admin' || hash === 'owner') targetRole = 'admin';
-      else if (hash === 'customer' || hash === 'menu') targetRole = 'customer';
+      else if (hash === 'portal' || hash === 'staff') {
+        // Floor staff portal entry
+        setAuthModal({ isOpen: true, targetRole: 'counter' });
+        return;
+      } else if (hash === 'customer' || hash === 'menu' || hash === '') {
+        targetRole = 'customer';
+      }
 
       if (targetRole) {
-        if (isAuthenticated(targetRole)) {
+        if (targetRole === 'customer' || isAuthenticated(targetRole)) {
           setCurrentRole(targetRole);
           if (targetRole === 'customer') setActiveTab('menu');
           else if (targetRole === 'chef') setActiveTab('chef');
           else if (targetRole === 'counter') { setActiveTab('orders'); setCounterSubTab('orders'); }
           else if (targetRole === 'kds') setActiveTab('kds');
         } else {
-          // Trigger interface authentication modal
+          // Open workstation authentication gate
           setAuthModal({ isOpen: true, targetRole });
         }
       }
@@ -110,19 +152,21 @@ export default function App() {
   }, []);
 
   // Active in-progress orders count
-  const activeOrdersCount = orders.filter((o) => o.status !== 'done' && o.status !== 'rejected').length;
+  const activeOrdersCount = orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length;
 
   // Handle Order Placement from Customer
   const handlePlaceOrder = (newOrder) => {
     setOrders((prev) => [newOrder, ...prev]);
-    // Trigger celebratory confetti
+    // Celebratory confetti
     confetti({
       particleCount: 80,
       spread: 60,
       origin: { y: 0.7 }
     });
-    // Trigger audio chime for kitchen alert
-    playNewOrderChime();
+    // Kitchen chime sound
+    if (!isSoundMuted) {
+      playNewOrderChime();
+    }
     setActiveTab('track');
   };
 
@@ -148,7 +192,7 @@ export default function App() {
   // Switch role helper with Authentication Verification
   const handleRoleSwitch = (role) => {
     playTapSound();
-    if (!isAuthenticated(role)) {
+    if (role !== 'customer' && !isAuthenticated(role)) {
       setAuthModal({ isOpen: true, targetRole: role });
       return;
     }
@@ -197,12 +241,10 @@ export default function App() {
     const updated = getStoredSessions();
     setAuthSessions(updated);
 
-    if (currentRole === roleToLogout) {
-      // Return safely to customer QR view
-      setCurrentRole('customer');
-      window.location.hash = 'customer';
-      setActiveTab('menu');
-    }
+    // Return safely to customer QR dining view
+    setCurrentRole('customer');
+    window.location.hash = 'customer';
+    setActiveTab('menu');
   };
 
   const cartTotal = cart.reduce((a, b) => a + b.price * b.quantity, 0);
@@ -210,7 +252,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Production Restaurant OS Header (Widescreen on Laptops/Desktops, Responsive on Mobile) */}
+      {/* Dynamic Header: Clean & Isolated for Customer, Workstation for Staff */}
       <Header
         chef={chef}
         theme={theme}
@@ -222,19 +264,21 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         isSearchOpen={isSearchOpen}
         setIsSearchOpen={setIsSearchOpen}
-        onChefClick={() => handleRoleSwitch('chef')}
         activeOrdersCount={activeOrdersCount}
         cartCount={cartCount}
         cartTotal={cartTotal}
         onOpenCart={() => {
-          handleRoleSwitch('customer');
+          setCurrentRole('customer');
           setActiveTab('cart');
         }}
         onResetDemo={handleResetDemo}
         authSessions={authSessions}
-        onOpenAuth={(role) => setAuthModal({ isOpen: true, targetRole: role })}
         onLogoutRole={handleLogoutRole}
         onOpenTableQr={() => setIsTableQrOpen(true)}
+        language={language}
+        onToggleLanguage={() => setLanguage((l) => (l === 'en' ? 'hi' : 'en'))}
+        isSoundMuted={isSoundMuted}
+        onToggleSound={() => setIsSoundMuted((m) => !m)}
       />
 
       {/* Main Full-Viewport Content Area */}
@@ -255,6 +299,10 @@ export default function App() {
               onGoToChef={() => handleRoleSwitch('chef')}
               searchQuery={searchQuery}
               offers={offers}
+              language={language}
+              onOpenStaffPortal={() => setAuthModal({ isOpen: true, targetRole: 'counter' })}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
             />
           )}
 
@@ -265,6 +313,7 @@ export default function App() {
               onAddToCart={(item) => {
                 setCart((prev) => [...prev, { ...item, quantity: 1, note: "Chef's Signature Recommendation" }]);
                 handleRoleSwitch('customer');
+                setActiveTab('cart');
               }}
               onGoToMenu={() => handleRoleSwitch('customer')}
             />
@@ -279,6 +328,7 @@ export default function App() {
               offers={offers}
               setOffers={setOffers}
               theme={theme}
+              setTheme={setTheme}
               chef={chef}
               checklists={checklists}
               setChecklists={setChecklists}
@@ -317,7 +367,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Mobile-Only Bottom Navigation Dock (Hidden on Laptops / Desktops >= 769px) */}
+      {/* Mobile-Only Bottom Navigation Dock (Role-Aware and Cleanly Isolated) */}
       <BottomNav
         currentRole={currentRole}
         activeTab={
@@ -355,9 +405,10 @@ export default function App() {
         }}
         cartCount={cartCount}
         activeOrdersCount={activeOrdersCount}
+        language={language}
       />
 
-      {/* Interface Specific Authentication Modal */}
+      {/* Interface Specific Authentication Modal / Staff Station Gate */}
       <AuthModal
         isOpen={authModal.isOpen}
         targetRole={authModal.targetRole}
@@ -366,7 +417,7 @@ export default function App() {
         theme={theme}
       />
 
-      {/* Zero-Auth Direct Table QR Code Generator & Standee Modal */}
+      {/* Table QR Standee & Direct Order Link Modal */}
       <TableQrModal
         isOpen={isTableQrOpen}
         onClose={() => setIsTableQrOpen(false)}

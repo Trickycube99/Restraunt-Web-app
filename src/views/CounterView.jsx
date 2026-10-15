@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layers,
   CheckCircle2,
@@ -19,11 +19,15 @@ import {
   MessageSquare,
   Monitor,
   Flame,
-  Send
+  Send,
+  Sparkles,
+  Bell,
+  Utensils
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import PrinterModal from '../components/PrinterModal';
 import WhatsAppAlertModal from '../components/WhatsAppAlertModal';
+import { broadcastSyncEvent, SYNC_EVENTS, subscribeSyncEvents } from '../utils/sync';
 
 export default function CounterView({
   orders,
@@ -33,6 +37,7 @@ export default function CounterView({
   offers,
   setOffers,
   theme,
+  setTheme,
   chef,
   checklists,
   setChecklists,
@@ -71,6 +76,23 @@ export default function CounterView({
   const [newOfferValue, setNewOfferValue] = useState('');
   const [newOfferDesc, setNewOfferDesc] = useState('');
 
+  // Suggestables Configuration (FR-P6)
+  const [selectedPairingId, setSelectedPairingId] = useState(3);
+
+  // Server Call Alerts Banner
+  const [serverAlert, setServerAlert] = useState(null);
+
+  // Listen for real-time events from customers
+  useEffect(() => {
+    const unsubscribe = subscribeSyncEvents((msg) => {
+      if (msg.type === SYNC_EVENTS.CALL_SERVER) {
+        setServerAlert(msg.payload);
+        playAlertChime();
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   // Calculate Expected Totals from recorded orders for today
   const expectedCash = orders
     .filter((o) => o.paymentMode.toLowerCase().includes('counter') || o.paymentMode.toLowerCase().includes('cash'))
@@ -96,48 +118,63 @@ export default function CounterView({
   // Status Handlers (FR-P2)
   const handleUpdateStatus = (orderId, newStatus, newLabel, progressPercent) => {
     playTapSound();
+    let updatedOrder = null;
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id === orderId) {
-          return {
+          updatedOrder = {
             ...ord,
             status: newStatus,
             statusLabel: newLabel,
             progressPercent: progressPercent
           };
+          return updatedOrder;
         }
         return ord;
       })
     );
-    if (newStatus === 'done') {
+
+    // Broadcast status change in real time to the customer
+    if (updatedOrder) {
+      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, updatedOrder);
+    }
+
+    if (newStatus === 'done' || newStatus === 'served') {
       playSuccessChime();
     }
   };
 
   const handleRejectSubmit = () => {
     playTapSound();
+    let rejectedOrder = null;
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id === rejectOrderId) {
-          return {
+          rejectedOrder = {
             ...ord,
             status: 'rejected',
             statusLabel: `Rejected: ${rejectReason}`,
             progressPercent: 0
           };
+          return rejectedOrder;
         }
         return ord;
       })
     );
+
+    if (rejectedOrder) {
+      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, rejectedOrder);
+    }
+
     setRejectOrderId(null);
   };
 
   // Toggle Item Availability (FR-P4)
   const handleToggleAvailability = (itemId) => {
     playTapSound();
-    setMenu((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, isAvailable: !item.isAvailable } : item))
-    );
+    const updated = menu.map((item) => (item.id === itemId ? { ...item, isAvailable: !item.isAvailable } : item));
+    setMenu(updated);
+    broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
   };
 
   // Save Price Edit (FR-P4)
@@ -145,9 +182,9 @@ export default function CounterView({
     playTapSound();
     const priceNum = parseFloat(newPrice);
     if (!isNaN(priceNum) && priceNum > 0 && editingItem) {
-      setMenu((prev) =>
-        prev.map((item) => (item.id === editingItem.id ? { ...item, price: priceNum } : item))
-      );
+      const updated = menu.map((item) => (item.id === editingItem.id ? { ...item, price: priceNum } : item));
+      setMenu(updated);
+      broadcastSyncEvent(SYNC_EVENTS.MENU_UPDATED, updated);
       setEditingItem(null);
       playSuccessChime();
     }
@@ -168,7 +205,9 @@ export default function CounterView({
       isActive: true
     };
 
-    setOffers((prev) => [offerObj, ...prev]);
+    const updated = [offerObj, ...offers];
+    setOffers(updated);
+    broadcastSyncEvent(SYNC_EVENTS.OFFERS_UPDATED, updated);
     setNewOfferCode('');
     setNewOfferValue('');
     setNewOfferDesc('');
@@ -197,9 +236,9 @@ export default function CounterView({
 
     const newOrder = {
       id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName: manualCustomer,
+      customerName: manualCustomer || 'Walk-in Diner',
       table: manualTable,
-      phone: 'Walk-in',
+      phone: 'Walk-in POS',
       createdAt: new Date().toISOString(),
       status: 'in-progress',
       statusLabel: 'Punched at Counter',
@@ -215,6 +254,7 @@ export default function CounterView({
     };
 
     setOrders((prev) => [newOrder, ...prev]);
+    broadcastSyncEvent(SYNC_EVENTS.NEW_ORDER, newOrder);
     setManualItems([]);
     setActiveSubTab('orders');
     playSuccessChime();
@@ -248,13 +288,20 @@ export default function CounterView({
     };
 
     setChecklists((prev) => [report, ...prev]);
+    broadcastSyncEvent(SYNC_EVENTS.CHECKLIST_SUBMITTED, report);
     setChecklistSubmitted(true);
     playSuccessChime();
   };
 
-  // Filter orders by status tab
+  // Filter orders by status tab (supports both cooking/in-progress and served/done)
   const filteredOrders = orders.filter((o) => {
     if (filterStatus === 'all') return true;
+    if (filterStatus === 'cooking' || filterStatus === 'in-progress') {
+      return o.status === 'cooking' || o.status === 'in-progress';
+    }
+    if (filterStatus === 'served' || filterStatus === 'done') {
+      return o.status === 'served' || o.status === 'done';
+    }
     return o.status === filterStatus;
   });
 
@@ -266,6 +313,42 @@ export default function CounterView({
         <div className="screen-subtitle">Live Kitchen Stack, POS Punching & EOD Cash Checklist</div>
       </div>
 
+      {/* Real-time Server Call Alert Banner */}
+      {serverAlert && (
+        <div
+          style={{
+            background: '#FEF3C7',
+            border: '1.5px solid #F59E0B',
+            borderRadius: 14,
+            padding: '12px 14px',
+            marginBottom: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Bell size={20} color="#D97706" />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#92400E' }}>
+                Service Call: {serverAlert.table} ({serverAlert.customerName})
+              </div>
+              <div style={{ fontSize: 11, color: '#B45309' }}>
+                Guest requested staff assistance at {serverAlert.timestamp}
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn-secondary-pill"
+            style={{ padding: '6px 12px', fontSize: 12 }}
+            onClick={() => setServerAlert(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Sub-Nav Tabs (Strict Design System Rules) */}
       <div className="filter-tabs-container" style={{ padding: '0 0 12px' }}>
         <button
@@ -275,7 +358,7 @@ export default function CounterView({
             setActiveSubTab('orders');
           }}
         >
-          Live Stack ({orders.filter((o) => o.status !== 'done' && o.status !== 'rejected').length})
+          Live Stack ({orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length})
         </button>
 
         <button
@@ -295,7 +378,7 @@ export default function CounterView({
             setActiveSubTab('stock');
           }}
         >
-          Menu & Prices
+          Menu & Rates
         </button>
 
         <button
@@ -314,7 +397,7 @@ export default function CounterView({
         <div>
           {/* Status Quick Filter Bar */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 4 }}>
-            {['all', 'received', 'in-progress', 'ready', 'done'].map((st) => (
+            {['all', 'received', 'cooking', 'ready', 'served'].map((st) => (
               <button
                 key={st}
                 className="capsule-tab"
@@ -335,7 +418,7 @@ export default function CounterView({
             ))}
           </div>
 
-          {/* Quick Hardware & Station Status Bar (Phase 2) */}
+          {/* Quick Hardware & Station Status Bar */}
           <div
             style={{
               display: 'flex',
@@ -358,7 +441,7 @@ export default function CounterView({
                   Kitchen Display System (KDS)
                 </div>
                 <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                  {orders.filter((o) => o.status !== 'done' && o.status !== 'rejected').length} Live Kitchen Prep Tickets
+                  {orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length} Live Kitchen Prep Tickets
                 </div>
               </div>
             </div>
@@ -388,18 +471,27 @@ export default function CounterView({
                 let pillType = 'pending';
                 let fillType = 'pending';
 
-                if (order.status === 'in-progress' || order.status === 'ready') {
+                if (order.status === 'cooking' || order.status === 'in-progress' || order.status === 'ready') {
                   gradClass = 'active-gradient';
                   pillType = 'progress';
                   fillType = 'progress';
-                } else if (order.status === 'done') {
+                } else if (order.status === 'served' || order.status === 'done') {
                   gradClass = 'completed-gradient';
                   pillType = 'done';
                   fillType = 'done';
                 }
 
+                // PRD Section 16 Fallback reminder: Check if order sits unaccepted for > 2 mins
+                const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
+                const isUnacceptedOverdue = order.status === 'received' && elapsedMs > 2 * 60 * 1000;
+                const elapsedMins = Math.floor(elapsedMs / 60000);
+
                 return (
-                  <div key={order.id} className={`ios-card ${gradClass}`}>
+                  <div
+                    key={order.id}
+                    className={`ios-card ${gradClass}`}
+                    style={isUnacceptedOverdue ? { border: '2px solid #EF4444', animation: 'pulse 2s infinite' } : {}}
+                  >
                     {/* Top Row: Title & Status */}
                     <div className="card-top-row">
                       <div className="card-title-group">
@@ -410,7 +502,7 @@ export default function CounterView({
                           </span>
                         </div>
                         <span className="card-meta-text">
-                          Diner: {order.customerName} • {order.phone}
+                          Diner: {order.customerName} • {order.phone} • {elapsedMins < 1 ? 'Just now' : `${elapsedMins}m ago`}
                         </span>
                       </div>
 
@@ -423,6 +515,28 @@ export default function CounterView({
                         </div>
                       </div>
                     </div>
+
+                    {/* PRD Section 16 Fallback reminder badge if unaccepted > 2 mins */}
+                    {isUnacceptedOverdue && (
+                      <div
+                        style={{
+                          background: '#FEE2E2',
+                          border: '1px solid #F87171',
+                          borderRadius: 8,
+                          padding: '6px 10px',
+                          color: '#B91C1C',
+                          fontWeight: 700,
+                          fontSize: 11,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          marginTop: 6
+                        }}
+                      >
+                        <AlertTriangle size={14} color="#DC2626" />
+                        <span>⚠️ Order sitting unaccepted for 2+ mins! Tap Accept to notify kitchen.</span>
+                      </div>
+                    )}
 
                     {/* Middle: Bullet points list of items (Strict HIG Rule) */}
                     <ul className="body-subtask" style={{ margin: '8px 0 10px' }}>
@@ -463,8 +577,8 @@ export default function CounterView({
                       </span>
                     </div>
 
-                    {/* Action Buttons Row */}
-                    {order.status !== 'done' && order.status !== 'rejected' && (
+                    {/* One-tap Status Action Buttons Row (FR-P2) */}
+                    {order.status !== 'done' && order.status !== 'served' && order.status !== 'rejected' && (
                       <div
                         style={{
                           display: 'grid',
@@ -473,42 +587,58 @@ export default function CounterView({
                           marginTop: 10
                         }}
                       >
+                        {/* 1. Accept Button -> Transitions to Cooking */}
                         <button
                           className="btn-secondary-pill"
                           style={{
                             padding: '7px 4px',
                             fontSize: 11,
-                            background: order.status === 'in-progress' ? '#E0F2FE' : '#F3F4F6'
+                            fontWeight: 700,
+                            background: (order.status === 'cooking' || order.status === 'in-progress') ? '#E0F2FE' : '#F3F4F6',
+                            color: (order.status === 'cooking' || order.status === 'in-progress') ? '#0284C7' : '#374151',
+                            border: (order.status === 'cooking' || order.status === 'in-progress') ? '1.5px solid #0284C7' : 'none'
                           }}
-                          onClick={() => handleUpdateStatus(order.id, 'in-progress', 'In Kitchen', 55)}
+                          onClick={() => handleUpdateStatus(order.id, 'cooking', 'Cooking in Kitchen', 50)}
+                          title="Accept ticket and mark as Cooking"
                         >
                           Accept
                         </button>
 
+                        {/* 2. Ready Button -> Transitions to Ready */}
                         <button
                           className="btn-secondary-pill"
                           style={{
                             padding: '7px 4px',
                             fontSize: 11,
-                            background: order.status === 'ready' ? '#FEF08A' : '#F3F4F6'
+                            fontWeight: 700,
+                            background: order.status === 'ready' ? '#FEF08A' : '#F3F4F6',
+                            color: order.status === 'ready' ? '#A16207' : '#374151',
+                            border: order.status === 'ready' ? '1.5px solid #EAB308' : 'none'
                           }}
-                          onClick={() => handleUpdateStatus(order.id, 'ready', 'Ready to Serve', 85)}
+                          onClick={() => handleUpdateStatus(order.id, 'ready', 'Ready to Serve', 80)}
+                          title="Mark dishes Ready for service"
                         >
                           Ready
                         </button>
 
+                        {/* 3. Done Button -> Transitions to Served */}
                         <button
                           className="btn-primary-pill"
-                          style={{ padding: '7px 4px', fontSize: 11, background: '#16A34A' }}
-                          onClick={() => handleUpdateStatus(order.id, 'done', 'Completed', 100)}
+                          style={{ padding: '7px 4px', fontSize: 11, background: '#16A34A', fontWeight: 700 }}
+                          onClick={() => handleUpdateStatus(order.id, 'served', 'Served to Table', 100)}
+                          title="Mark as Served & Done"
                         >
                           Done
                         </button>
 
+                        {/* 4. Reject Button */}
                         <button
                           className="btn-secondary-pill"
                           style={{ padding: '7px 4px', fontSize: 11, color: '#DC2626' }}
-                          onClick={() => setRejectOrderId(order.id)}
+                          onClick={() => {
+                            playTapSound();
+                            setRejectOrderId(order.id);
+                          }}
                         >
                           Reject
                         </button>
@@ -562,7 +692,7 @@ export default function CounterView({
                       </button>
                     </div>
 
-                    {/* Thin Bottom Progress Bar (4px - 6px) */}
+                    {/* Progress Bar */}
                     <div className="card-bottom-progress">
                       <div
                         className={`card-bottom-progress-fill ${fillType}`}
@@ -683,9 +813,41 @@ export default function CounterView({
         </div>
       )}
 
-      {/* VIEW 3: MENU AVAILABILITY & PRICES (FR-P4) */}
+      {/* VIEW 3: MENU AVAILABILITY, PRICES & SUGGESTABLES (FR-P4, FR-P5, FR-P6) */}
       {activeSubTab === 'stock' && (
         <div>
+          {/* FR-P6 Suggestables Pairing Configuration */}
+          <div className="ios-card" style={{ marginBottom: 16 }}>
+            <div className="card-top-row">
+              <div className="card-title-group">
+                <span className="card-heading">Suggestables & Upsell Pairing (FR-P6)</span>
+                <span className="card-meta-text">Configure add-on featured pairing on customer menus</span>
+              </div>
+              <Sparkles size={18} color="#007AFF" />
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                Featured Pairing Dish:
+              </label>
+              <select
+                className="ios-select"
+                value={selectedPairingId}
+                onChange={(e) => setSelectedPairingId(Number(e.target.value))}
+              >
+                {menu.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} (₹{m.price})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
+              ✓ Selected item will be presented to all table diners as a recommended pairing!
+            </div>
+          </div>
+
+          {/* Stock & Price Control */}
           <div className="ios-card" style={{ marginBottom: 16 }}>
             <div className="card-top-row">
               <div className="card-title-group">

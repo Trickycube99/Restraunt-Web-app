@@ -22,53 +22,58 @@ import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 
 export default function AuthModal({
   isOpen,
-  targetRole,
+  targetRole = ROLES.COUNTER,
   onSuccess,
   onClose,
   theme
 }) {
-  if (!isOpen || !targetRole) return null;
+  const [currentStation, setCurrentStation] = useState(targetRole || ROLES.COUNTER);
 
-  const roleConfig = ROLE_CONFIGS[targetRole] || ROLE_CONFIGS[ROLES.CUSTOMER];
+  useEffect(() => {
+    if (targetRole && targetRole !== ROLES.CUSTOMER) {
+      setCurrentStation(targetRole);
+    } else {
+      setCurrentStation(ROLES.COUNTER);
+    }
+  }, [targetRole]);
 
-  // Form states based on targetRole
+  const roleConfig = ROLE_CONFIGS[currentStation] || ROLE_CONFIGS[ROLES.COUNTER];
+
+  // Form states based on currentStation
   const [formData, setFormData] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form data when targetRole changes
+  // Initialize form data when currentStation changes
   useEffect(() => {
+    if (!isOpen) return;
     setErrorMessage('');
-    if (targetRole === ROLES.CUSTOMER) {
+    if (currentStation === ROLES.CHEF) {
       setFormData({
-        name: roleConfig.demoCredentials.name,
-        phone: roleConfig.demoCredentials.phone,
-        table: roleConfig.demoCredentials.table
-      });
-    } else if (targetRole === ROLES.CHEF) {
-      setFormData({
-        email: roleConfig.demoCredentials.email,
+        email: roleConfig.demoCredentials?.email || 'chef@advait.in',
         pin: ''
       });
-    } else if (targetRole === ROLES.COUNTER) {
+    } else if (currentStation === ROLES.COUNTER) {
       setFormData({
-        terminal: roleConfig.demoCredentials.terminal,
-        cashierName: roleConfig.demoCredentials.cashierName,
+        terminal: roleConfig.demoCredentials?.terminal || 'POS-01 (Flagship CP)',
+        cashierName: roleConfig.demoCredentials?.cashierName || 'Rohan Verma',
         pin: ''
       });
-    } else if (targetRole === ROLES.KDS) {
+    } else if (currentStation === ROLES.KDS) {
       setFormData({
-        station: roleConfig.demoCredentials.station,
-        leadName: roleConfig.demoCredentials.leadName,
+        station: roleConfig.demoCredentials?.station || 'Hot Line & Tandoor Station',
+        leadName: roleConfig.demoCredentials?.leadName || 'Vikram Singh',
         pin: ''
       });
-    } else if (targetRole === ROLES.ADMIN) {
+    } else if (currentStation === ROLES.ADMIN) {
       setFormData({
-        email: roleConfig.demoCredentials.email,
+        email: roleConfig.demoCredentials?.email || 'admin@advaitkitchen.com',
         pin: ''
       });
     }
-  }, [targetRole]);
+  }, [currentStation, isOpen, roleConfig]);
+
+  if (!isOpen) return null;
 
   // Quick 1-tap demo credentials filler
   const handleAutoFillDemo = () => {
@@ -84,14 +89,14 @@ export default function AuthModal({
     setErrorMessage('');
 
     // Attempt authentication via abstraction layer
-    const result = authenticateRole(targetRole, formData);
+    const result = authenticateRole(currentStation, formData);
 
     if (result.success) {
       playSuccessChime();
       setTimeout(() => {
         setIsSubmitting(false);
         onSuccess(result.session);
-      }, 250);
+      }, 200);
     } else {
       playAlertChime();
       setIsSubmitting(false);
@@ -100,19 +105,17 @@ export default function AuthModal({
   };
 
   const getRoleIcon = () => {
-    switch (targetRole) {
-      case ROLES.CUSTOMER:
-        return <QrCode size={26} color="#007AFF" />;
-      case ROLES.CHEF:
-        return <ShieldCheck size={26} color="#16A34A" />;
+    switch (currentStation) {
       case ROLES.COUNTER:
-        return <Layers size={26} color="#F59E0B" />;
-      case ROLES.KDS:
-        return <Monitor size={26} color="#38BDF8" />;
+        return <Layers size={24} color="#F59E0B" />;
       case ROLES.ADMIN:
-        return <BarChart3 size={26} color="#8B5CF6" />;
+        return <BarChart3 size={24} color="#8B5CF6" />;
+      case ROLES.KDS:
+        return <Monitor size={24} color="#38BDF8" />;
+      case ROLES.CHEF:
+        return <ShieldCheck size={24} color="#16A34A" />;
       default:
-        return <Lock size={26} color="#007AFF" />;
+        return <Lock size={24} color="#007AFF" />;
     }
   };
 
@@ -127,13 +130,13 @@ export default function AuthModal({
         {/* Modal Header */}
         <div className="auth-modal-header">
           <div className="auth-role-avatar-wrapper">
-            <div className={`auth-role-avatar role-${targetRole}`}>
+            <div className={`auth-role-avatar role-${currentStation}`}>
               {getRoleIcon()}
             </div>
             <div>
               <div className="auth-role-badge">
                 <Lock size={11} />
-                <span>{roleConfig.badge}</span>
+                <span>Restaurant Staff Station</span>
               </div>
               <h3 className="auth-modal-title">{roleConfig.name}</h3>
             </div>
@@ -148,6 +151,37 @@ export default function AuthModal({
           >
             <X size={18} />
           </button>
+        </div>
+
+        {/* Station Selector Tabs for Staff */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, margin: '10px 0 14px' }}>
+          {[
+            { id: ROLES.COUNTER, label: 'POS', icon: Layers },
+            { id: ROLES.ADMIN, label: 'Admin', icon: BarChart3 },
+            { id: ROLES.KDS, label: 'KDS', icon: Monitor },
+            { id: ROLES.CHEF, label: 'Chef', icon: ShieldCheck }
+          ].map((st) => (
+            <button
+              key={st.id}
+              type="button"
+              className={`btn-secondary-pill ${currentStation === st.id ? 'active' : ''}`}
+              style={{
+                padding: '6px 4px',
+                fontSize: 11,
+                justifyContent: 'center',
+                background: currentStation === st.id ? '#EFF6FF' : '#F9FAFB',
+                borderColor: currentStation === st.id ? '#007AFF' : '#E5E7EB',
+                color: currentStation === st.id ? '#007AFF' : 'var(--text-secondary)'
+              }}
+              onClick={() => {
+                playTapSound();
+                setCurrentStation(st.id);
+              }}
+            >
+              <st.icon size={12} />
+              <span>{st.label}</span>
+            </button>
+          ))}
         </div>
 
         {/* Security Description */}
@@ -169,100 +203,8 @@ export default function AuthModal({
 
         {/* Dynamic Form based on Target Role */}
         <form onSubmit={handleSubmit} className="auth-modal-form">
-          {/* CUSTOMER FORM */}
-          {targetRole === ROLES.CUSTOMER && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <User size={13} />
-                  <span>Diner Name</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Aarav Sharma"
-                  className="auth-input"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  autoFocus
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <Phone size={13} />
-                  <span>WhatsApp / Mobile (+91)</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  maxLength={10}
-                  placeholder="10-digit mobile number"
-                  className="auth-input"
-                  value={formData.phone || ''}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-                <span className="auth-hint">Used for live kitchen WhatsApp updates & loyalty rewards</span>
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <Utensils size={13} />
-                  <span>Seated Table</span>
-                </label>
-                <select
-                  className="auth-input auth-select"
-                  value={formData.table || 'Table 04'}
-                  onChange={(e) => setFormData({ ...formData, table: e.target.value })}
-                >
-                  {(theme?.tables || ['Table 01', 'Table 02', 'Table 03', 'Table 04', 'Table 05', 'Table 06', 'Table 07', 'Table 08', 'Table 09', 'Table 10']).map((t) => (
-                    <option key={t} value={t}>
-                      {t} (Dine-in Floor)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* CHEF FORM */}
-          {targetRole === ROLES.CHEF && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <User size={13} />
-                  <span>Executive Chef Identifier</span>
-                </label>
-                <input
-                  type="email"
-                  disabled
-                  value={formData.email || 'chef@advait.in'}
-                  className="auth-input auth-input-disabled"
-                />
-                <span className="auth-hint">FSSAI Master Lic: #10022001004812</span>
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Culinary Passkey / PIN</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter 4-digit Passkey (Demo: 1002)"
-                  className="auth-input"
-                  maxLength={6}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                  autoFocus
-                />
-              </div>
-            </>
-          )}
-
           {/* COUNTER POS FORM */}
-          {targetRole === ROLES.COUNTER && (
+          {currentStation === ROLES.COUNTER && (
             <>
               <div className="auth-input-group">
                 <label className="auth-label">
@@ -313,8 +255,46 @@ export default function AuthModal({
             </>
           )}
 
+          {/* ADMIN FORM */}
+          {currentStation === ROLES.ADMIN && (
+            <>
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <User size={13} />
+                  <span>Owner Executive Email</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="admin@advaitkitchen.com"
+                  className="auth-input"
+                  value={formData.email || ''}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <KeyRound size={13} />
+                  <span>Master Owner PIN / Password</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter Master PIN (Demo: 8821)"
+                  className="auth-input"
+                  maxLength={8}
+                  value={formData.pin || ''}
+                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                />
+                <span className="auth-hint">Protects P&L cash, HDFC bank rec, automated payroll & Tally exports</span>
+              </div>
+            </>
+          )}
+
           {/* KITCHEN KDS FORM */}
-          {targetRole === ROLES.KDS && (
+          {currentStation === ROLES.KDS && (
             <>
               <div className="auth-input-group">
                 <label className="auth-label">
@@ -352,40 +332,38 @@ export default function AuthModal({
             </>
           )}
 
-          {/* ADMIN FORM */}
-          {targetRole === ROLES.ADMIN && (
+          {/* CHEF FORM */}
+          {currentStation === ROLES.CHEF && (
             <>
               <div className="auth-input-group">
                 <label className="auth-label">
                   <User size={13} />
-                  <span>Owner Executive Email</span>
+                  <span>Executive Chef Identifier</span>
                 </label>
                 <input
                   type="email"
-                  required
-                  placeholder="admin@advaitkitchen.com"
-                  className="auth-input"
-                  value={formData.email || ''}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  autoFocus
+                  disabled
+                  value={formData.email || 'chef@advait.in'}
+                  className="auth-input auth-input-disabled"
                 />
+                <span className="auth-hint">FSSAI Master Lic: #10022001004812</span>
               </div>
 
               <div className="auth-input-group">
                 <label className="auth-label">
                   <KeyRound size={13} />
-                  <span>Master Owner PIN / Password</span>
+                  <span>Culinary Passkey / PIN</span>
                 </label>
                 <input
                   type="password"
                   required
-                  placeholder="Enter Master PIN (Demo: 8821)"
+                  placeholder="Enter 4-digit Passkey (Demo: 1002)"
                   className="auth-input"
-                  maxLength={8}
+                  maxLength={6}
                   value={formData.pin || ''}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                  autoFocus
                 />
-                <span className="auth-hint">Protects P&L cash, HDFC bank rec, automated payroll & Tally exports</span>
               </div>
             </>
           )}
@@ -401,11 +379,10 @@ export default function AuthModal({
               <span>1-Tap Demo Auto-Fill</span>
             </button>
             <div className="auth-demo-hint">
-              {targetRole === ROLES.CUSTOMER && 'Aarav Sharma • 9876543210 • Table 04'}
-              {targetRole === ROLES.CHEF && 'Passkey PIN: 1002'}
-              {targetRole === ROLES.COUNTER && 'Cashier PIN: 4421'}
-              {targetRole === ROLES.KDS && 'Station PIN: 7700'}
-              {targetRole === ROLES.ADMIN && 'admin@advaitkitchen.com • PIN: 8821'}
+              {currentStation === ROLES.COUNTER && 'Cashier PIN: 4421'}
+              {currentStation === ROLES.ADMIN && 'admin@advaitkitchen.com • PIN: 8821'}
+              {currentStation === ROLES.KDS && 'Station PIN: 7700'}
+              {currentStation === ROLES.CHEF && 'Passkey PIN: 1002'}
             </div>
           </div>
 
@@ -419,7 +396,7 @@ export default function AuthModal({
                 onClose();
               }}
             >
-              Cancel
+              Back to Dining Menu
             </button>
             <button
               type="submit"

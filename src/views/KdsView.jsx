@@ -14,6 +14,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
+import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 
 export default function KdsView({ orders, setOrders, chef }) {
   const [selectedStation, setSelectedStation] = useState('all');
@@ -45,7 +46,7 @@ export default function KdsView({ orders, setOrders, chef }) {
   };
 
   // Filter orders that are in kitchen (not completed/rejected yet)
-  const activeKdsOrders = orders.filter((o) => o.status !== 'done' && o.status !== 'rejected');
+  const activeKdsOrders = orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected');
 
   // Filter tickets by station
   const filteredTickets = activeKdsOrders.filter((order) => {
@@ -59,7 +60,7 @@ export default function KdsView({ orders, setOrders, chef }) {
     return Math.max(0, Math.floor(elapsedMs / 60000));
   };
 
-  // Bump Ticket (Mark Ready or Done)
+  // Bump Ticket (Mark Ready or Served)
   const handleBumpTicket = (orderId) => {
     playTapSound();
     const targetOrder = orders.find((o) => o.id === orderId);
@@ -67,25 +68,40 @@ export default function KdsView({ orders, setOrders, chef }) {
 
     setBumpedHistory((prev) => [targetOrder, ...prev.slice(0, 4)]);
 
+    let bumpedOrder = null;
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id === orderId) {
-          const nextStatus = o.status === 'in-progress' ? 'ready' : 'done';
-          const nextLabel = nextStatus === 'ready' ? 'Ready to Serve' : 'Completed';
-          return { ...o, status: nextStatus, statusLabel: nextLabel, progressPercent: nextStatus === 'ready' ? 85 : 100 };
+          const nextStatus = (o.status === 'cooking' || o.status === 'in-progress' || o.status === 'received') ? 'ready' : 'served';
+          const nextLabel = nextStatus === 'ready' ? 'Ready to Serve' : 'Served to Table';
+          bumpedOrder = { ...o, status: nextStatus, statusLabel: nextLabel, progressPercent: nextStatus === 'ready' ? 85 : 100 };
+          return bumpedOrder;
         }
         return o;
       })
     );
+    if (bumpedOrder) {
+      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, bumpedOrder);
+    }
     playSuccessChime();
   };
 
   // Recall bumped ticket
   const handleRecall = (orderId) => {
     playTapSound();
+    let recalledOrder = null;
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: 'in-progress', statusLabel: 'In Kitchen', progressPercent: 55 } : o))
+      prev.map((o) => {
+        if (o.id === orderId) {
+          recalledOrder = { ...o, status: 'cooking', statusLabel: 'Cooking in Kitchen', progressPercent: 50 };
+          return recalledOrder;
+        }
+        return o;
+      })
     );
+    if (recalledOrder) {
+      broadcastSyncEvent(SYNC_EVENTS.ORDER_STATUS_UPDATED, recalledOrder);
+    }
     setBumpedHistory((prev) => prev.filter((o) => o.id !== orderId));
   };
 
