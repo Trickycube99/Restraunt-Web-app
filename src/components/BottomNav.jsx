@@ -29,7 +29,7 @@ export default function BottomNav({
   authSessions = {}
 }) {
   const getTabs = () => {
-    if (currentRole === 'customer') {
+    if (currentRole === 'customer' || currentRole === 'chef') {
       return [
         {
           id: 'menu',
@@ -54,13 +54,6 @@ export default function BottomNav({
           icon: ShieldCheck,
           hasDot: true
         }
-      ];
-    } else if (currentRole === 'chef') {
-      return [
-        { id: 'menu', label: language === 'hi' ? 'मेनू' : 'Menu', icon: Utensils },
-        { id: 'chef', label: language === 'hi' ? 'शेफ' : 'About Chef', icon: ShieldCheck, hasDot: true },
-        { id: 'cart', label: language === 'hi' ? 'थाली' : 'Tray', icon: ShoppingBag, badge: cartCount > 0 ? cartCount : null },
-        { id: 'track', label: language === 'hi' ? 'लाइव स्थिति' : 'Live Status', icon: Clock, badge: activeOrdersCount > 0 ? activeOrdersCount : null }
       ];
     } else if (currentRole === 'counter') {
       return [

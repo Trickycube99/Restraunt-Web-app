@@ -10,7 +10,8 @@ import {
   Heart,
   QrCode,
   UtensilsCrossed,
-  Info
+  Info,
+  ArrowLeft
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
@@ -33,7 +34,40 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
   };
 
   return (
-    <div style={{ padding: '16px', overflowY: 'auto', flex: 1, paddingBottom: 90 }}>
+    <div style={{ width: '100%', flex: 1, paddingBottom: 60, overflowX: 'hidden' }}>
+      {/* Mobile-Friendly Top Navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <button
+          type="button"
+          onClick={() => {
+            playTapSound();
+            onGoToMenu();
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: 20,
+            padding: '6px 14px',
+            fontSize: 12,
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            cursor: 'pointer',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+          }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Menu</span>
+        </button>
+
+        <span className="status-pill done" style={{ fontSize: 11, padding: '4px 10px' }}>
+          <ShieldCheck size={12} />
+          <span>FSSAI 5-Star Certified</span>
+        </span>
+      </div>
+
       {/* Header section with screen title and subtitle */}
       <div style={{ marginBottom: 16 }}>
         <div className="screen-title">About the Chef</div>
@@ -106,26 +140,26 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 8,
-            background: 'rgba(255, 255, 255, 0.85)',
+            gap: 6,
+            background: 'rgba(255, 255, 255, 0.9)',
             border: '1px solid #E5E7EB',
             borderRadius: 14,
-            padding: '10px 8px',
+            padding: '10px 6px',
             marginBottom: 14,
             textAlign: 'center'
           }}
         >
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#16A34A' }}>{chef.hygieneScore}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>FSSAI Hygiene</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#16A34A' }}>{chef.hygieneScore}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>FSSAI Hygiene</div>
           </div>
           <div style={{ borderLeft: '1px solid #E5E7EB', borderRight: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary-blue)' }}>5-Star A+</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Clean Dining</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary-blue)' }}>5-Star A+</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Clean Dining</div>
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#9333EA' }}>{chef.certifications.length} Credentials</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>Govt. Audited</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#9333EA' }}>{chef.certifications?.length || 4} Badges</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Govt. Audited</div>
           </div>
         </div>
 
@@ -207,10 +241,12 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
                 border: '1px solid #E5E7EB',
                 borderRadius: 14,
                 cursor: 'pointer',
-                transition: 'background 0.15s ease'
+                transition: 'background 0.15s ease',
+                gap: 8,
+                minWidth: 0
               }}
             >
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0, flex: 1 }}>
                 <div
                   style={{
                     width: 32,
@@ -220,23 +256,24 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#D97706'
+                    color: '#D97706',
+                    flexShrink: 0
                   }}
                 >
                   <Award size={16} />
                 </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {cert.name}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {cert.issuer} • {cert.year}
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span className="status-pill done" style={{ fontSize: 10, padding: '2px 6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <span className="status-pill done" style={{ fontSize: 10, padding: '2px 6px', whiteSpace: 'nowrap' }}>
                   {cert.badge}
                 </span>
                 <ChevronRight size={14} color="#9CA3AF" />
@@ -262,7 +299,7 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
           ))}
         </ul>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             Diners Verified: <strong>{verifiedCount}</strong>
           </div>
@@ -304,26 +341,27 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
                 display: 'flex',
                 gap: 12,
                 alignItems: 'center',
-                padding: '8px',
+                padding: '10px',
                 background: '#F9FAFB',
                 borderRadius: 14,
-                border: '1px solid #E5E7EB'
+                border: '1px solid #E5E7EB',
+                minWidth: 0
               }}
             >
               <img
                 src={item.image}
                 alt={item.name}
-                style={{ width: 68, height: 68, borderRadius: 12, objectFit: 'cover' }}
+                style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }}
               />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {item.name}
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary-blue)', marginTop: 2 }}>
                   ₹{item.price.toFixed(0)}
                 </div>
-                <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                  {item.tags.map((tag, i) => (
+                <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                  {item.tags.slice(0, 2).map((tag, i) => (
                     <span key={i} className="status-pill tag" style={{ fontSize: 9, padding: '1px 6px' }}>
                       {tag}
                     </span>
@@ -332,7 +370,7 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
               </div>
               <button
                 className="btn-primary-pill"
-                style={{ padding: '6px 12px', fontSize: 12 }}
+                style={{ padding: '6px 12px', fontSize: 12, flexShrink: 0 }}
                 onClick={() => {
                   playTapSound();
                   onAddToCart(item);

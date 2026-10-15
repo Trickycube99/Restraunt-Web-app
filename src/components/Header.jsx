@@ -67,7 +67,7 @@ export default function Header({
   ];
 
   const currentSession = authSessions[currentRole];
-  const isCustomer = currentRole === 'customer';
+  const isCustomer = currentRole === 'customer' || currentRole === 'chef';
 
   // -------------------------------------------------------------
   // 1. DEDICATED CUSTOMER-FACING HEADER

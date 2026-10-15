@@ -1505,33 +1505,6 @@ export default function CustomerView({
   // -------------------------------------------------------------
   return (
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 95 }}>
-      {/* Verified Chef Callout Header Banner */}
-      <div
-        className="chef-verified-banner"
-        onClick={() => {
-          playTapSound();
-          onGoToChef();
-        }}
-        title="Tap to verify Executive Chef credentials & FSSAI audit"
-      >
-        <div className="chef-banner-left">
-          <img src={chef.portrait} alt={chef.name} className="chef-banner-avatar" />
-          <div className="chef-banner-text">
-            <div className="chef-banner-title">
-              <span>{t('verifiedChef')} {chef.name}</span>
-              <ShieldCheck size={14} color="#007AFF" />
-            </div>
-            <div className="chef-banner-subtitle">
-              {t('fssaiBadge')} • 18+ Yrs Mastery
-            </div>
-          </div>
-        </div>
-        <div className="chef-banner-action">
-          <span>{language === 'hi' ? 'देखें' : 'Verify'}</span>
-          <ChevronRight size={12} />
-        </div>
-      </div>
-
       {/* Screen Title & Welcome with Diner Name Pill */}
       <div style={{ padding: '12px 18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
         <div>
@@ -1573,6 +1546,36 @@ export default function CustomerView({
             <Edit2 size={10} color="#15803D" />
           </button>
         )}
+      </div>
+
+      {/* Subtle Chef & FSSAI Verification Option (Opt-in) */}
+      <div style={{ padding: '0 18px 10px', display: 'flex', alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={() => {
+            playTapSound();
+            if (onGoToChef) onGoToChef();
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: 20,
+            padding: '5px 12px',
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: '#475569',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+          title="Tap to view verified Executive Chef credentials & FSSAI audit"
+        >
+          <ShieldCheck size={13} color="#16A34A" />
+          <span>{language === 'hi' ? `शेफ ${chef?.name || 'अद्वैत'} व FSSAI प्रमाण देखें` : `About Chef ${chef?.name || 'Advait'} & Credentials`}</span>
+          <ChevronRight size={12} color="#94A3B8" />
+        </button>
       </div>
 
       {/* Filter / Sub-Nav Tabs (Strict Design System Specification) */}

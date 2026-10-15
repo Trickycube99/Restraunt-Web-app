@@ -146,8 +146,11 @@ export default function App() {
       const route = rawHash || rawPath;
 
       let targetRole = null;
-      if (route === 'chef') targetRole = 'chef';
-      else if (route === 'counter' || route === 'pos') targetRole = 'counter';
+      if (route === 'chef') {
+        setCurrentRole('customer');
+        setActiveTab('chef');
+        return;
+      } else if (route === 'counter' || route === 'pos') targetRole = 'counter';
       else if (route === 'kds' || route === 'kitchen') targetRole = 'kds';
       else if (route === 'admin' || route === 'owner') targetRole = 'admin';
       else if (route === 'portal' || route === 'staff') {
@@ -362,38 +365,41 @@ export default function App() {
       <main className="app-main-viewport">
         <div className="app-content-container">
           {/* Dynamic Views Rendering */}
-          {currentRole === 'customer' && (
-            <CustomerView
-              menu={menu}
-              chef={chef}
-              theme={theme}
-              activeTable={activeTable}
-              setActiveTable={setActiveTable}
-              orders={orders}
-              cart={cart}
-              setCart={setCart}
-              onPlaceOrder={handlePlaceOrder}
-              onGoToChef={() => handleRoleSwitch('chef')}
-              searchQuery={searchQuery}
-              offers={offers}
-              language={language}
-              onOpenStaffPortal={() => setAuthModal({ isOpen: true, targetRole: 'counter' })}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-            />
-          )}
-
-          {currentRole === 'chef' && (
-            <AboutChefView
-              chef={chef}
-              menu={menu}
-              onAddToCart={(item) => {
-                setCart((prev) => [...prev, { ...item, quantity: 1, note: "Chef's Signature Recommendation" }]);
-                handleRoleSwitch('customer');
-                setActiveTab('cart');
-              }}
-              onGoToMenu={() => handleRoleSwitch('customer')}
-            />
+          {(currentRole === 'customer' || currentRole === 'chef') && (
+            activeTab === 'chef' || currentRole === 'chef' ? (
+              <AboutChefView
+                chef={chef}
+                menu={menu}
+                onAddToCart={(item) => {
+                  setCart((prev) => [...prev, { ...item, quantity: 1, note: "Chef's Signature Recommendation" }]);
+                  setCurrentRole('customer');
+                  setActiveTab('cart');
+                }}
+                onGoToMenu={() => {
+                  setCurrentRole('customer');
+                  setActiveTab('menu');
+                }}
+              />
+            ) : (
+              <CustomerView
+                menu={menu}
+                chef={chef}
+                theme={theme}
+                activeTable={activeTable}
+                setActiveTable={setActiveTable}
+                orders={orders}
+                cart={cart}
+                setCart={setCart}
+                onPlaceOrder={handlePlaceOrder}
+                onGoToChef={() => setActiveTab('chef')}
+                searchQuery={searchQuery}
+                offers={offers}
+                language={language}
+                onOpenStaffPortal={() => setAuthModal({ isOpen: true, targetRole: 'counter' })}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+              />
+            )
           )}
 
           {currentRole === 'counter' && (
@@ -452,10 +458,8 @@ export default function App() {
       <BottomNav
         currentRole={currentRole}
         activeTab={
-          currentRole === 'customer'
+          currentRole === 'customer' || currentRole === 'chef'
             ? activeTab
-            : currentRole === 'chef'
-            ? 'chef'
             : currentRole === 'counter'
             ? counterSubTab
             : currentRole === 'kds'
@@ -463,17 +467,11 @@ export default function App() {
             : adminTab
         }
         setActiveTab={(tabId) => {
-          if (currentRole === 'customer') {
-            if (tabId === 'chef') {
-              handleRoleSwitch('chef');
-            } else {
-              setActiveTab(tabId);
+          if (currentRole === 'customer' || currentRole === 'chef') {
+            if (currentRole === 'chef') {
+              setCurrentRole('customer');
             }
-          } else if (currentRole === 'chef') {
-            if (tabId !== 'chef') {
-              handleRoleSwitch('customer');
-              setActiveTab(tabId);
-            }
+            setActiveTab(tabId);
           } else if (currentRole === 'counter') {
             setCounterSubTab(tabId);
           } else if (currentRole === 'kds') {
