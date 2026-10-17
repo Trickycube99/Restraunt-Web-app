@@ -410,12 +410,8 @@ export default function App() {
       }
     }
 
-    // Developer Superadmin role check
+    // Developer Superadmin role check (DeveloperAdminView handles its own isolated login screen)
     if (role === 'developer') {
-      if (!isAuthenticated('developer', currentRole)) {
-        setAuthModal({ isOpen: true, targetRole: 'developer' });
-        return;
-      }
       setCurrentRole('developer');
       window.location.hash = 'developer';
       return;
@@ -516,35 +512,37 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {/* Dynamic Header: Clean & Isolated for Customer, Workstation for Staff */}
-      <Header
-        chef={chef}
-        theme={theme}
-        currentRole={currentRole}
-        onRoleSwitch={handleRoleSwitch}
-        activeTable={activeTable}
-        setActiveTable={setActiveTable}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        isSearchOpen={isSearchOpen}
-        setIsSearchOpen={setIsSearchOpen}
-        activeOrdersCount={activeOrdersCount}
-        cartCount={cartCount}
-        cartTotal={cartTotal}
-        onOpenCart={() => {
-          setCurrentRole('customer');
-          setActiveTab('cart');
-        }}
-        onResetDemo={handleResetDemo}
-        authSessions={authSessions}
-        onLogoutRole={handleLogoutRole}
-        onOpenTableQr={() => setIsTableQrOpen(true)}
-        language={language}
-        onToggleLanguage={() => setLanguage((l) => (l === 'en' ? 'hi' : 'en'))}
-        isSoundMuted={isSoundMuted}
-        onToggleSound={() => setIsSoundMuted((m) => !m)}
-        canReturnToAdmin={canReturnToAdmin}
-      />
+      {/* Dynamic Header: Clean & Isolated for Customer, Workstation for Staff (Developer has standalone UI) */}
+      {currentRole !== 'developer' && (
+        <Header
+          chef={chef}
+          theme={theme}
+          currentRole={currentRole}
+          onRoleSwitch={handleRoleSwitch}
+          activeTable={activeTable}
+          setActiveTable={setActiveTable}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          isSearchOpen={isSearchOpen}
+          setIsSearchOpen={setIsSearchOpen}
+          activeOrdersCount={activeOrdersCount}
+          cartCount={cartCount}
+          cartTotal={cartTotal}
+          onOpenCart={() => {
+            setCurrentRole('customer');
+            setActiveTab('cart');
+          }}
+          onResetDemo={handleResetDemo}
+          authSessions={authSessions}
+          onLogoutRole={handleLogoutRole}
+          onOpenTableQr={() => setIsTableQrOpen(true)}
+          language={language}
+          onToggleLanguage={() => setLanguage((l) => (l === 'en' ? 'hi' : 'en'))}
+          isSoundMuted={isSoundMuted}
+          onToggleSound={() => setIsSoundMuted((m) => !m)}
+          canReturnToAdmin={canReturnToAdmin}
+        />
+      )}
 
       {/* Main Full-Viewport Content Area */}
       <main className="app-main-viewport">

@@ -514,22 +514,6 @@ export default function Header({
             <span className="qr-pill-label">Table QRs</span>
           </button>
 
-          {/* Developer Superadmin Console Trigger (Only visible to Developer or Admin, hidden for counter staff) */}
-          {(currentRole === 'developer' || currentRole === 'admin' || authSessions?.developer?.token) && (
-            <button
-              className="btn-secondary-pill"
-              style={{ color: '#0891B2', borderColor: '#A5F3FC', background: '#F0FDFA', fontWeight: 600 }}
-              onClick={() => {
-                playTapSound();
-                onRoleSwitch('developer');
-              }}
-              title="Open Developer Superadmin Console"
-            >
-              <Server size={13} color="#0891B2" />
-              <span className="reset-label">Dev Console</span>
-            </button>
-          )}
-
           {/* Reset Demo Data Button */}
           <button
             className="btn-secondary-pill reset-demo-pill"

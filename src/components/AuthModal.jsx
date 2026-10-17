@@ -3,7 +3,6 @@ import {
   Lock,
   Layers,
   BarChart3,
-  Server,
   KeyRound,
   User,
   AlertCircle,
@@ -21,32 +20,29 @@ export default function AuthModal({
   onClose
 }) {
   const [selectedStation, setSelectedStation] = useState(null);
-  const currentStation = selectedStation || (targetRole && targetRole !== ROLES.CUSTOMER ? targetRole : ROLES.COUNTER);
+  const currentStation = selectedStation || (targetRole === ROLES.ADMIN ? ROLES.ADMIN : ROLES.COUNTER);
 
   const roleConfig = ROLE_CONFIGS[currentStation] || ROLE_CONFIGS[ROLES.COUNTER];
 
   // Discrete form state
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = () => {
     setPin('');
     setEmail('');
-    setPassword('');
     setErrorMessage('');
     setSelectedStation(null);
   };
 
   if (!isOpen) return null;
 
-  // Station switcher tabs (No autofill button)
+  // Station switcher tabs (No autofill button) - Strictly Counter & Owner Admin
   const allTabs = [
     { id: ROLES.COUNTER, label: 'Counterperson POS', icon: Layers },
-    { id: ROLES.ADMIN, label: 'Business Owner Admin', icon: BarChart3 },
-    { id: ROLES.DEVELOPER, label: 'Developer Console', icon: Server }
+    { id: ROLES.ADMIN, label: 'Business Owner Admin', icon: BarChart3 }
   ];
 
   const allowedTabs = allTabs.filter((t) => {
@@ -63,9 +59,7 @@ export default function AuthModal({
     setErrorMessage('');
 
     let creds = {};
-    if (currentStation === ROLES.DEVELOPER) {
-      creds = { email, password };
-    } else if (currentStation === ROLES.ADMIN) {
+    if (currentStation === ROLES.ADMIN) {
       creds = { email, pin };
     } else {
       creds = { terminal: 'POS-01 (Flagship CP)', pin };
@@ -94,8 +88,6 @@ export default function AuthModal({
         return <Layers size={24} color="#F59E0B" />;
       case ROLES.ADMIN:
         return <BarChart3 size={24} color="#8B5CF6" />;
-      case ROLES.DEVELOPER:
-        return <Server size={24} color="#06B6D4" />;
       default:
         return <Lock size={24} color="#007AFF" />;
     }
@@ -245,43 +237,6 @@ export default function AuthModal({
             </>
           )}
 
-          {/* DEVELOPER SUPERADMIN FORM */}
-          {currentStation === ROLES.DEVELOPER && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <Server size={13} />
-                  <span>Developer Superadmin Email *</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  placeholder="dev@platform.com"
-                  className="auth-input"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoFocus
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Master Access Key / Password *</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter developer access key"
-                  className="auth-input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <span className="auth-hint">Full platform access to manage all tenant businesses.</span>
-              </div>
-            </>
-          )}
-
           {/* Actions (Zero Autofill Button as requested) */}
           <div className="auth-actions-row" style={{ marginTop: 14 }}>
             <button
@@ -298,9 +253,6 @@ export default function AuthModal({
               type="submit"
               disabled={isSubmitting}
               className="btn-primary-pill auth-submit-btn"
-              style={{
-                background: currentStation === ROLES.DEVELOPER ? 'linear-gradient(135deg, #06B6D4 0%, #0284C7 100%)' : undefined
-              }}
             >
               <span>{isSubmitting ? 'Verifying...' : `Unlock ${roleConfig.shortName}`}</span>
               <ChevronRight size={15} />
