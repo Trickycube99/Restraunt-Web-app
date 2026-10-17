@@ -20,6 +20,7 @@ import {
 import { loadData, saveData, resetAllDataToDefault, STORAGE_KEYS } from './utils/storage';
 import {
   getStoredSessions,
+  saveStoredSessions,
   isAuthenticated,
   logoutRole,
   resetAllSessions
@@ -27,7 +28,8 @@ import {
 import {
   getActiveBusiness,
   setActiveBusiness,
-  getBusinesses
+  getBusinesses,
+  isDeveloperAuthenticated
 } from './utils/businessManager';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
@@ -84,6 +86,19 @@ export default function App() {
   const [authSessions, setAuthSessions] = useState(() => getStoredSessions());
   const [authModal, setAuthModal] = useState({ isOpen: false, targetRole: null });
   const [isTableQrOpen, setIsTableQrOpen] = useState(false);
+  const [switchedFromAdmin, setSwitchedFromAdmin] = useState(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem('flowscape_switched_from_admin') === 'true';
+    }
+    return false;
+  });
+
+  const canReturnToAdmin = Boolean(
+    switchedFromAdmin ||
+    Boolean(authSessions?.admin?.token) ||
+    (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('flowscape_switched_from_admin') === 'true') ||
+    isDeveloperAuthenticated()
+  );
 
   // Cart & Active Table State (Customer specific)
   const [cart, setCart] = useState([]);
@@ -322,6 +337,27 @@ export default function App() {
     setActiveBusiness(biz.id);
     setActiveBusinessId(biz.id);
     loadBusinessData(biz.id, biz);
+
+    if (targetRole === 'admin') {
+      const currentSessions = getStoredSessions();
+      currentSessions.admin = {
+        role: 'admin',
+        businessId: biz.id,
+        businessName: biz.name,
+        name: biz.owner.name,
+        email: biz.owner.email,
+        token: `admin_${biz.id}_${Date.now()}`,
+        authenticatedAt: new Date().toISOString(),
+        authenticatedBy: 'admin'
+      };
+      saveStoredSessions(currentSessions);
+      setAuthSessions(currentSessions);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('flowscape_switched_from_admin', 'true');
+      }
+      setSwitchedFromAdmin(true);
+    }
+
     setCurrentRole(targetRole);
     window.location.hash = targetRole;
     if (targetRole === 'admin') setActiveTab('sales');
@@ -333,9 +369,40 @@ export default function App() {
   const handleRoleSwitch = (role) => {
     playTapSound();
     const sessions = authSessions || getStoredSessions();
-    const hasAdminAccess = Boolean(sessions?.admin?.token);
+    const hasAdminAccess = Boolean(
+      switchedFromAdmin ||
+      sessions?.admin?.token ||
+      (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('flowscape_switched_from_admin') === 'true') ||
+      isDeveloperAuthenticated()
+    );
 
-    // Counter person can ONLY access counter (CANNOT access admin)
+    // If switching from admin to counter, record that this session originated from admin
+    if (currentRole === 'admin' && role === 'counter') {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('flowscape_switched_from_admin', 'true');
+      }
+      setSwitchedFromAdmin(true);
+
+      // Ensure an active admin session token is recorded
+      const currentSessions = getStoredSessions();
+      if (!currentSessions.admin?.token) {
+        const activeBiz = getActiveBusiness();
+        currentSessions.admin = {
+          role: 'admin',
+          businessId: activeBiz.id,
+          businessName: activeBiz.name,
+          name: activeBiz.owner.name,
+          email: activeBiz.owner.email,
+          token: `admin_${activeBiz.id}_${Date.now()}`,
+          authenticatedAt: new Date().toISOString(),
+          authenticatedBy: 'admin'
+        };
+        saveStoredSessions(currentSessions);
+        setAuthSessions(currentSessions);
+      }
+    }
+
+    // Counter person who directly logged into live POS cannot access admin
     if (currentRole === 'counter' && role === 'admin') {
       if (!hasAdminAccess) {
         alert('Access Denied: Counter staff cannot access Owner Back-Office. Counter permissions are limited to Counter POS.');
@@ -378,11 +445,31 @@ export default function App() {
 
   // Auth Success Handler
   const handleAuthSuccess = (newSession, matchedBusiness) => {
-    const updated = getStoredSessions();
-    setAuthSessions(updated);
-    setAuthModal({ isOpen: false, targetRole: null });
-
     const role = newSession.role;
+
+    if (role === 'counter') {
+      // Direct login to live POS: strictly clear any admin session and switched-from-admin flag
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('flowscape_switched_from_admin');
+      }
+      setSwitchedFromAdmin(false);
+      const currentSessions = getStoredSessions();
+      currentSessions.admin = null;
+      saveStoredSessions(currentSessions);
+      setAuthSessions(currentSessions);
+    } else if (role === 'admin') {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('flowscape_switched_from_admin', 'true');
+      }
+      setSwitchedFromAdmin(true);
+      const updated = getStoredSessions();
+      setAuthSessions(updated);
+    } else {
+      const updated = getStoredSessions();
+      setAuthSessions(updated);
+    }
+
+    setAuthModal({ isOpen: false, targetRole: null });
     setCurrentRole(role);
     window.location.hash = role;
 
@@ -411,6 +498,10 @@ export default function App() {
   const handleLogoutRole = (roleToLogout) => {
     playTapSound();
     logoutRole(roleToLogout);
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('flowscape_switched_from_admin');
+    }
+    setSwitchedFromAdmin(false);
     const updated = getStoredSessions();
     setAuthSessions(updated);
 
@@ -452,6 +543,7 @@ export default function App() {
         onToggleLanguage={() => setLanguage((l) => (l === 'en' ? 'hi' : 'en'))}
         isSoundMuted={isSoundMuted}
         onToggleSound={() => setIsSoundMuted((m) => !m)}
+        canReturnToAdmin={canReturnToAdmin}
       />
 
       {/* Main Full-Viewport Content Area */}
@@ -510,6 +602,8 @@ export default function App() {
               setChecklists={setChecklists}
               activeSubTab={counterSubTab}
               setActiveSubTab={setCounterSubTab}
+              canReturnToAdmin={canReturnToAdmin}
+              onReturnToAdmin={() => handleRoleSwitch('admin')}
             />
           )}
 

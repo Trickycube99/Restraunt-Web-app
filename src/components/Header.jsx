@@ -40,6 +40,7 @@ export default function Header({
   onOpenCart,
   onResetDemo,
   authSessions = {},
+  canReturnToAdmin = false,
   onLogoutRole,
   onOpenTableQr,
   language = 'en',
@@ -422,12 +423,12 @@ export default function Header({
               </button>
 
               {/* If an Admin is operating the counter, allow switching back to Admin */}
-              {authSessions?.admin?.token && (
+              {canReturnToAdmin && (
                 <button
-                  className="nav-role-pill"
+                  className="nav-role-pill return-to-admin-pill"
                   onClick={() => onRoleSwitch('admin')}
                   title="Return to Owner Admin"
-                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6' }}
+                  style={{ borderColor: '#8B5CF6', color: '#8B5CF6', background: '#F5F3FF', fontWeight: 600 }}
                 >
                   <BarChart3 size={14} />
                   <span>Owner Admin</span>
@@ -513,19 +514,21 @@ export default function Header({
             <span className="qr-pill-label">Table QRs</span>
           </button>
 
-          {/* Developer Superadmin Console Trigger */}
-          <button
-            className="btn-secondary-pill"
-            style={{ color: '#0891B2', borderColor: '#A5F3FC', background: '#F0FDFA', fontWeight: 600 }}
-            onClick={() => {
-              playTapSound();
-              onRoleSwitch('developer');
-            }}
-            title="Open Developer Superadmin Console"
-          >
-            <Server size={13} color="#0891B2" />
-            <span className="reset-label">Dev Console</span>
-          </button>
+          {/* Developer Superadmin Console Trigger (Only visible to Developer or Admin, hidden for counter staff) */}
+          {(currentRole === 'developer' || currentRole === 'admin' || authSessions?.developer?.token) && (
+            <button
+              className="btn-secondary-pill"
+              style={{ color: '#0891B2', borderColor: '#A5F3FC', background: '#F0FDFA', fontWeight: 600 }}
+              onClick={() => {
+                playTapSound();
+                onRoleSwitch('developer');
+              }}
+              title="Open Developer Superadmin Console"
+            >
+              <Server size={13} color="#0891B2" />
+              <span className="reset-label">Dev Console</span>
+            </button>
+          )}
 
           {/* Reset Demo Data Button */}
           <button

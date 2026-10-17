@@ -13,7 +13,8 @@ import {
   MessageSquare,
   Sparkles,
   Bell,
-  Trash2
+  Trash2,
+  BarChart3
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import PrinterModal from '../components/PrinterModal';
@@ -62,7 +63,9 @@ export default function CounterView({
   checklists: _checklists,
   setChecklists,
   activeSubTab = 'orders',
-  setActiveSubTab
+  setActiveSubTab,
+  canReturnToAdmin = false,
+  onReturnToAdmin
 }) {
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'received', 'in-progress', 'ready', 'done'
   const [rejectOrderId, setRejectOrderId] = useState(null);
@@ -348,6 +351,73 @@ export default function CounterView({
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px', paddingBottom: 85 }}>
+      {/* Seamless Owner Return Banner when switched from Admin */}
+      {canReturnToAdmin && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)',
+            border: '1.5px solid #DDD6FE',
+            borderRadius: 14,
+            padding: '12px 16px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            boxShadow: '0 4px 14px rgba(124, 58, 237, 0.08)'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: '#8B5CF6',
+                color: '#FFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0
+              }}
+            >
+              <BarChart3 size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#5B21B6' }}>
+                Owner Admin Station Active • Operating Live POS Terminal
+              </div>
+              <div style={{ fontSize: 11, color: '#7C3AED' }}>
+                You switched into Live Counter POS from Owner Back-Office. Tap here whenever you want to return.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-primary-pill"
+            onClick={() => {
+              playTapSound();
+              if (onReturnToAdmin) onReturnToAdmin();
+            }}
+            style={{
+              background: '#7C3AED',
+              borderColor: '#6D28D9',
+              padding: '8px 16px',
+              fontSize: 12,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 8px rgba(124, 58, 237, 0.3)'
+            }}
+          >
+            <BarChart3 size={14} />
+            <span>Return to Owner Admin</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Title & Sub-tabs */}
       <div style={{ marginBottom: 14 }}>
         <div className="screen-title">Counter Order Queue</div>

@@ -288,6 +288,11 @@ export function isAuthenticated(role, activeSessionRole = null) {
     return true;
   }
 
+  // If session switched from Admin, allow Admin access
+  if (role === ROLES.ADMIN && typeof sessionStorage !== 'undefined' && sessionStorage.getItem('flowscape_switched_from_admin') === 'true') {
+    return true;
+  }
+
   if (role === ROLES.COUNTER && sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
     return true;
   }
@@ -324,6 +329,14 @@ export function authenticateRole(role, credentials) {
   const session = config.createSession(credentials, validation);
   const currentSessions = getStoredSessions();
   currentSessions[role] = session;
+
+  // When directly logging into counter POS, strictly clear any admin session and switched-from-admin state
+  if (role === ROLES.COUNTER) {
+    currentSessions[ROLES.ADMIN] = null;
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('flowscape_switched_from_admin');
+    }
+  }
 
   saveStoredSessions(currentSessions);
 
