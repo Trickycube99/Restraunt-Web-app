@@ -106,6 +106,20 @@ export default function PrinterModal({ order, theme, chef, onClose }) {
             <>
               {/* Restaurant Header */}
               <div style={{ textAlign: 'center', marginBottom: 8 }}>
+                {theme?.logo && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+                    <img
+                      src={theme.logo}
+                      alt={theme.restaurantName}
+                      style={{
+                        maxHeight: 38,
+                        maxWidth: 130,
+                        objectFit: 'contain',
+                        filter: 'grayscale(100%) contrast(150%)'
+                      }}
+                    />
+                  </div>
+                )}
                 <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{theme.restaurantName}</div>
                 <div style={{ fontSize: '11px' }}>{theme.tagline}</div>
                 <div style={{ fontSize: '10px', color: '#4B5563' }}>FSSAI Lic: {chef.verificationId}</div>

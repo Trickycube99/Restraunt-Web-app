@@ -79,10 +79,16 @@ export default function Header({
           <div className="header-left">
             <div className="brand-pill customer-brand">
               <div className="brand-avatar-box">
-                {chef?.portrait ? (
+                {theme?.logo ? (
+                  <img
+                    src={theme.logo}
+                    alt={theme.restaurantName}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }}
+                  />
+                ) : chef?.portrait ? (
                   <img src={chef.portrait} alt={theme.restaurantName} />
                 ) : (
-                  <span>AD</span>
+                  <span>{(theme?.restaurantName || 'AD').substring(0, 2).toUpperCase()}</span>
                 )}
               </div>
               <div className="brand-info">
@@ -249,32 +255,51 @@ export default function Header({
         <div className="header-left">
           <div className="brand-pill staff-station-pill">
             <div className="brand-avatar-box staff-avatar">
-              {currentRole === 'counter' && <Layers size={16} color="#FFFFFF" />}
-              {currentRole === 'admin' && <BarChart3 size={16} color="#FFFFFF" />}
+              {currentRole === 'developer' ? (
+                <Server size={16} color="#38BDF8" />
+              ) : theme?.logo ? (
+                <img
+                  src={theme.logo}
+                  alt={theme.restaurantName}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }}
+                />
+              ) : currentRole === 'counter' ? (
+                <Layers size={16} color="#FFFFFF" />
+              ) : (
+                <BarChart3 size={16} color="#FFFFFF" />
+              )}
             </div>
             <div className="brand-info">
               <div className="brand-name-row">
                 <span className="brand-title">
-                  {currentRole === 'counter'
-                    ? 'POS Terminal 01'
-                    : 'Owner Executive Back-Office'}
+                  {currentRole === 'developer'
+                    ? 'FlowScape Root Console'
+                    : currentRole === 'counter'
+                    ? `${theme?.restaurantName ? `${theme.restaurantName} • ` : ''}POS Terminal 01`
+                    : `${theme?.restaurantName ? `${theme.restaurantName} • ` : ''}Owner Executive Back-Office`}
                 </span>
                 <span className="staff-online-dot" title="Workstation Online" />
               </div>
 
-              {/* Branch Selector Pill */}
-              <div
-                className="branch-selector-pill"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  playTapSound();
-                  setShowBranchMenu(!showBranchMenu);
-                }}
-              >
-                <MapPin size={10} color="#007AFF" />
-                <span>{activeBranch.split('(')[0].trim()}</span>
-                <ChevronDown size={10} />
-              </div>
+              {/* Branch Selector Pill or Developer Root Badge */}
+              {currentRole === 'developer' ? (
+                <div style={{ fontSize: 10, color: '#38BDF8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                  <span>Platform Superadmin Root</span>
+                </div>
+              ) : (
+                <div
+                  className="branch-selector-pill"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playTapSound();
+                    setShowBranchMenu(!showBranchMenu);
+                  }}
+                >
+                  <MapPin size={10} color="#007AFF" />
+                  <span>{activeBranch.split('(')[0].trim()}</span>
+                  <ChevronDown size={10} />
+                </div>
+              )}
 
               {showBranchMenu && (
                 <div className="branch-dropdown-menu">

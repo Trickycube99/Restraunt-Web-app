@@ -67,9 +67,16 @@ export default function App() {
       tagline: activeBiz.tagline || loaded?.tagline,
       upiId: activeBiz.upiId || loaded?.upiId,
       accentColor: activeBiz.accentColor || loaded?.accentColor,
+      logo: activeBiz.logo !== undefined ? activeBiz.logo : (loaded?.logo || null),
       tables: Array.isArray(activeBiz.tables) && activeBiz.tables.length > 0 ? activeBiz.tables : (loaded?.tables || initialTheme.tables)
     } : {};
-    return { ...initialTheme, ...loaded, ...bizOverride, upiId: loaded?.upiId || bizOverride.upiId || initialTheme.upiId || '9119069179@nyes' };
+    return {
+      ...initialTheme,
+      ...loaded,
+      ...bizOverride,
+      logo: bizOverride.logo !== undefined ? bizOverride.logo : (loaded?.logo || null),
+      upiId: loaded?.upiId || bizOverride.upiId || initialTheme.upiId || '9119069179@nyes'
+    };
   });
   const [checklists, setChecklists] = useState(() => loadData(getScopedKey(STORAGE_KEYS.CHECKLISTS, initialBizId), []));
 
@@ -113,6 +120,21 @@ export default function App() {
   useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.OFFERS, activeBusinessId), offers); }, [offers, activeBusinessId]);
   useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.THEME, activeBusinessId), theme); }, [theme, activeBusinessId]);
   useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.CHECKLISTS, activeBusinessId), checklists); }, [checklists, activeBusinessId]);
+
+  // Dynamic CSS variables for tenant branding (strictly isolated from developer superadmin console)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (currentRole === 'developer') {
+      root.style.removeProperty('--primary-blue');
+      root.style.removeProperty('--accent-blue-soft');
+      return;
+    }
+    if (theme?.accentColor) {
+      root.style.setProperty('--primary-blue', theme.accentColor);
+      root.style.setProperty('--accent-blue-soft', `${theme.accentColor}1A`);
+    }
+  }, [theme?.accentColor, currentRole]);
 
   // Real-Time Cross-Tab / Cross-Device Synchronization Listener
   useEffect(() => {
@@ -277,6 +299,7 @@ export default function App() {
       tagline: biz.tagline || loadedTheme?.tagline,
       upiId: biz.upiId || loadedTheme?.upiId,
       accentColor: biz.accentColor || loadedTheme?.accentColor,
+      logo: biz.logo !== undefined ? biz.logo : (loadedTheme?.logo || null),
       tables: Array.isArray(biz.tables) && biz.tables.length > 0 ? biz.tables : (loadedTheme?.tables || initialTheme.tables)
     } : {};
 
@@ -286,7 +309,12 @@ export default function App() {
     setStaff(loadedStaff);
     setOffers(loadedOffers);
     setChecklists(loadedChecklists);
-    setTheme({ ...initialTheme, ...loadedTheme, ...bizOverride });
+    setTheme({
+      ...initialTheme,
+      ...loadedTheme,
+      ...bizOverride,
+      logo: bizOverride.logo !== undefined ? bizOverride.logo : (loadedTheme?.logo || null)
+    });
   };
 
   // Launch / Switch to Tenant Workspace from Developer Superadmin
@@ -567,6 +595,8 @@ export default function App() {
         setActiveTable={setActiveTable}
         tables={theme.tables}
         restaurantName={theme.restaurantName}
+        logo={theme.logo}
+        tagline={theme.tagline}
       />
     </div>
   );

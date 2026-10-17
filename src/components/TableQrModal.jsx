@@ -22,7 +22,9 @@ export default function TableQrModal({
     'Table 01', 'Table 02', 'Table 03', 'Table 04', 'Table 05',
     'Table 06', 'Table 07', 'Table 08', 'Table 09', 'Table 10'
   ],
-  restaurantName = 'Advait Artisanal Indian Kitchen'
+  restaurantName = 'Advait Artisanal Indian Kitchen',
+  logo = null,
+  tagline = null
 }) {
   const [selectedTable, setSelectedTable] = useState(activeTable || 'Table 04');
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
@@ -150,8 +152,21 @@ export default function TableQrModal({
         {/* Printable Standee Card Mockup */}
         <div className="qr-standee-preview-card" id="printable-tent-card">
           <div className="qr-standee-header">
+            {logo && (
+              <img
+                src={logo}
+                alt={restaurantName}
+                style={{
+                  maxHeight: 34,
+                  maxWidth: 120,
+                  objectFit: 'contain',
+                  margin: '0 auto 6px',
+                  display: 'block'
+                }}
+              />
+            )}
             <span className="qr-standee-brand">{restaurantName}</span>
-            <span className="qr-standee-sub">Artisanal Indian Dining • FSSAI Accredited</span>
+            <span className="qr-standee-sub">{tagline || 'Artisanal Indian Dining • FSSAI Accredited'}</span>
           </div>
 
           <div className="qr-standee-table-badge">

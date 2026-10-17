@@ -484,19 +484,30 @@ export default function CustomerView({
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div
               style={{
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 borderRadius: '50%',
-                background: 'linear-gradient(135deg, #007AFF 0%, #0056B3 100%)',
+                background: theme?.logo ? '#FFFFFF' : 'linear-gradient(135deg, #007AFF 0%, #0056B3 100%)',
                 color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 12px',
-                boxShadow: '0 6px 14px rgba(0, 122, 255, 0.3)'
+                boxShadow: '0 6px 14px rgba(0, 122, 255, 0.2)',
+                border: theme?.logo ? '2px solid #E2E8F0' : 'none',
+                overflow: 'hidden',
+                padding: theme?.logo ? 4 : 0
               }}
             >
-              <Utensils size={24} />
+              {theme?.logo ? (
+                <img
+                  src={theme.logo}
+                  alt={theme.restaurantName}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+              ) : (
+                <Utensils size={24} />
+              )}
             </div>
 
             <div
@@ -1522,12 +1533,31 @@ export default function CustomerView({
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 95 }}>
       {/* Screen Title & Welcome with Diner Name Pill */}
       <div style={{ padding: '12px 18px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-        <div>
-          <div className="screen-title">{theme.restaurantName}</div>
-          <div className="screen-subtitle">
-            {language === 'hi'
-              ? `${activeTable} पर आपका स्वागत है। मेनू देखें और तुरंत ऑर्डर करें।`
-              : (theme.welcomeMessage || `Welcome to ${activeTable}! Order fresh dishes directly to your table.`)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {theme?.logo && (
+            <img
+              src={theme.logo}
+              alt={theme.restaurantName}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                objectFit: 'contain',
+                background: '#FFFFFF',
+                padding: 3,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                border: '1px solid #E2E8F0',
+                flexShrink: 0
+              }}
+            />
+          )}
+          <div>
+            <div className="screen-title">{theme.restaurantName}</div>
+            <div className="screen-subtitle">
+              {language === 'hi'
+                ? `${activeTable} पर आपका स्वागत है। मेनू देखें और तुरंत ऑर्डर करें।`
+                : (theme.welcomeMessage || `Welcome to ${activeTable}! Order fresh dishes directly to your table.`)}
+            </div>
           </div>
         </div>
 
@@ -2044,6 +2074,20 @@ export default function CustomerView({
           fontSize: 11
         }}
       >
+        {theme?.logo && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+            <img
+              src={theme.logo}
+              alt={theme.restaurantName}
+              style={{
+                maxHeight: 38,
+                maxWidth: 140,
+                objectFit: 'contain',
+                opacity: 0.9
+              }}
+            />
+          </div>
+        )}
         <div
           style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, userSelect: 'none' }}
           onClick={() => {

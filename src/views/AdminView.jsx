@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Receipt,
   Users,
@@ -17,7 +17,13 @@ import {
   Tag,
   Copy,
   Check,
-  Camera
+  Camera,
+  Upload,
+  Image as ImageIcon,
+  Sparkles,
+  Save,
+  ShieldCheck,
+  Utensils
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import BankReconciliationView from './BankReconciliationView';
@@ -29,6 +35,7 @@ import { exportToTallyPrimeXml, exportToZohoBooksCsv } from '../utils/accounting
 import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 import { STORAGE_KEYS, saveData } from '../utils/storage';
 import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
+import { getActiveBusiness, updateBusiness } from '../utils/businessManager';
 
 // Coupons & Offers Helpers (placed outside component for purity)
 const isOfferExpired = (offer) => {
@@ -97,6 +104,125 @@ export default function AdminView({
   const [newDishImage, setNewDishImage] = useState(null);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
 
+  // App Customizer Draft State & Handlers (FR-A5)
+  const [customizerDraft, setCustomizerDraft] = useState(() => ({
+    restaurantName: theme?.restaurantName || 'Advait Artisanal Kitchen',
+    tagline: theme?.tagline || 'Progressive Indian Table & Craft Kitchen',
+    welcomeMessage: theme?.welcomeMessage || 'Scan table QR, order effortlessly, and track your kitchen ticket in real time.',
+    accentColor: theme?.accentColor || '#007AFF',
+    menuLayout: theme?.menuLayout || 'grid',
+    upiId: theme?.upiId || '9119069179@nyes',
+    logo: theme?.logo || null
+  }));
+  const [customizerSaveSuccess, setCustomizerSaveSuccess] = useState(false);
+  const [isSavingCustomizer, setIsSavingCustomizer] = useState(false);
+  const logoInputRef = useRef(null);
+
+  // Sync draft when theme prop changes (React recommended pattern for adjusting state from props)
+  const [prevTheme, setPrevTheme] = useState(theme);
+  if (theme !== prevTheme) {
+    setPrevTheme(theme);
+    setCustomizerDraft({
+      restaurantName: theme?.restaurantName || 'Advait Artisanal Kitchen',
+      tagline: theme?.tagline || 'Progressive Indian Table & Craft Kitchen',
+      welcomeMessage: theme?.welcomeMessage || 'Scan table QR, order effortlessly, and track your kitchen ticket in real time.',
+      accentColor: theme?.accentColor || '#007AFF',
+      menuLayout: theme?.menuLayout || 'grid',
+      upiId: theme?.upiId || '9119069179@nyes',
+      logo: theme?.logo || null
+    });
+  }
+
+  // Handle logo image upload with automatic canvas optimization for fast sync
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const img = new Image();
+      img.onload = () => {
+        // Optimize to max 360x180 maintaining aspect ratio for clean localStorage & fast broadcast
+        const maxW = 360;
+        const maxH = 180;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/png', 0.92);
+
+        setCustomizerDraft((prev) => ({ ...prev, logo: dataUrl }));
+        setCustomizerSaveSuccess(false);
+        playTapSound();
+      };
+      img.src = readerEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = () => {
+    playTapSound();
+    setCustomizerDraft((prev) => ({ ...prev, logo: null }));
+    setCustomizerSaveSuccess(false);
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
+    }
+  };
+
+  // Save Customizer Settings & Broadcast to all screens in real-time
+  const handleSaveCustomizer = () => {
+    playTapSound();
+    setIsSavingCustomizer(true);
+
+    const updatedTheme = {
+      ...theme,
+      ...customizerDraft
+    };
+
+    // 1. Update state in parent App
+    setTheme(updatedTheme);
+
+    // 2. Persist in active business record
+    const activeBiz = getActiveBusiness();
+    if (activeBiz?.id) {
+      updateBusiness(activeBiz.id, {
+        name: customizerDraft.restaurantName,
+        tagline: customizerDraft.tagline,
+        upiId: customizerDraft.upiId,
+        accentColor: customizerDraft.accentColor,
+        logo: customizerDraft.logo
+      });
+    }
+
+    // 3. Save scoped theme to localStorage
+    const scopedKey = activeBiz?.id && activeBiz.id !== 'biz_advait'
+      ? `${STORAGE_KEYS.THEME}_${activeBiz.id}`
+      : STORAGE_KEYS.THEME;
+    saveData(scopedKey, updatedTheme);
+
+    // 4. Real-time broadcast to all open windows/tabs (customer devices, POS terminals)
+    broadcastSyncEvent(SYNC_EVENTS.THEME_UPDATED, updatedTheme);
+
+    // 5. Success chime & UI feedback
+    playSuccessChime();
+    setIsSavingCustomizer(false);
+    setCustomizerSaveSuccess(true);
+    setTimeout(() => setCustomizerSaveSuccess(false), 3500);
+  };
+
   // Sales KPIs calculation in ₹
   const totalOrdersCount = orders.length;
   const todayGrossSales = orders.reduce((sum, o) => sum + o.total, 0);
@@ -113,10 +239,10 @@ export default function AdminView({
 
   // Cash vs Obligations in ₹ (Section 5.4)
   const totalUpcomingObligations =
-    theme.upcomingObligations.rent +
-    theme.upcomingObligations.payroll +
-    theme.upcomingObligations.emi;
-  const totalAvailableFunds = theme.cashInHand + theme.pendingAggregatorSettlement;
+    (theme?.upcomingObligations?.rent || 0) +
+    (theme?.upcomingObligations?.payroll || 0) +
+    (theme?.upcomingObligations?.emi || 0);
+  const totalAvailableFunds = (theme?.cashInHand || 0) + (theme?.pendingAggregatorSettlement || 0);
   const isCashCrunchAlert = totalAvailableFunds < totalUpcomingObligations;
 
   // Top Items Analytics (FR-A4)
@@ -1711,94 +1837,443 @@ export default function AdminView({
 
       {/* 6. APP CUSTOMIZER (FR-A5) */}
       {activeAdminTab === 'branding' && (
-        <div className="ios-card" style={{ marginBottom: 16 }}>
-          <div className="card-top-row">
-            <div className="card-title-group">
-              <span className="card-heading">Customer Page Customization</span>
-              <span className="card-meta-text">No-code branding, layout and welcome settings</span>
-            </div>
-            <Palette size={18} color="#007AFF" />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Restaurant Name</label>
-              <input
-                type="text"
-                className="ios-input"
-                value={theme.restaurantName}
-                onChange={(e) => setTheme({ ...theme, restaurantName: e.target.value })}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Welcome Greeting</label>
-              <input
-                type="text"
-                className="ios-input"
-                value={theme.welcomeMessage}
-                onChange={(e) => setTheme({ ...theme, welcomeMessage: e.target.value })}
-              />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+          {/* Main Customizer Settings Card */}
+          <div className="ios-card">
+            <div className="card-top-row" style={{ marginBottom: 16 }}>
+              <div className="card-title-group">
+                <span className="card-heading">App Customizer & Branding Studio</span>
+                <span className="card-meta-text">Upload your restaurant logo, customize colors, and configure live guest dining touchpoints</span>
+              </div>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  background: `${customizerDraft.accentColor}1A`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <Palette size={18} color={customizerDraft.accentColor || '#007AFF'} />
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {/* Hidden file input for logo */}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              onChange={handleLogoUpload}
+              style={{ display: 'none' }}
+            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* Section A: Restaurant Brand Logo */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Accent Color</label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                  {['#007AFF', '#10B981', '#8B5CF6', '#F59E0B'].map((color) => (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Restaurant Brand Logo
+                  </label>
+                  <span style={{ fontSize: 11, color: '#16A34A', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Sparkles size={11} /> Reflects on all headers, footers & receipts
+                  </span>
+                </div>
+
+                {customizerDraft.logo ? (
+                  <div
+                    style={{
+                      background: '#F8FAFC',
+                      border: '1.5px solid #E2E8F0',
+                      borderRadius: 14,
+                      padding: 14,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                      flexWrap: 'wrap'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div
+                        style={{
+                          width: 80,
+                          height: 54,
+                          borderRadius: 10,
+                          border: '1px solid #CBD5E1',
+                          background: '#FFFFFF',
+                          backgroundImage: 'linear-gradient(45deg, #F1F5F9 25%, transparent 25%), linear-gradient(-45deg, #F1F5F9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #F1F5F9 75%), linear-gradient(-45deg, transparent 75%, #F1F5F9 75%)',
+                          backgroundSize: '12px 12px',
+                          backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 4,
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                        }}
+                      >
+                        <img
+                          src={customizerDraft.logo}
+                          alt="Custom Brand Logo"
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                        />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Custom Logo Active</div>
+                        <div style={{ fontSize: 11, color: '#64748B' }}>PNG / Scaled for instant &lt;50ms cross-tab broadcast</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn-secondary-pill"
+                        onClick={() => logoInputRef.current?.click()}
+                        style={{ fontSize: 12, padding: '7px 12px' }}
+                      >
+                        <Upload size={13} color="#007AFF" />
+                        <span>Change</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary-pill"
+                        onClick={handleRemoveLogo}
+                        style={{ fontSize: 12, padding: '7px 12px', color: '#DC2626', borderColor: '#FECACA' }}
+                        title="Remove custom logo and return to default initials"
+                      >
+                        <Trash2 size={13} color="#DC2626" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => logoInputRef.current?.click()}
+                    style={{
+                      border: '2px dashed #CBD5E1',
+                      borderRadius: 14,
+                      padding: '20px 16px',
+                      textAlign: 'center',
+                      background: '#F8FAFC',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = customizerDraft.accentColor || '#007AFF'; e.currentTarget.style.background = '#F0F9FF'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#CBD5E1'; e.currentTarget.style.background = '#F8FAFC'; }}
+                  >
                     <div
-                      key={color}
-                      onClick={() => setTheme({ ...theme, accentColor: color })}
                       style={{
-                        width: 28,
-                        height: 28,
+                        width: 44,
+                        height: 44,
                         borderRadius: '50%',
-                        background: color,
-                        cursor: 'pointer',
-                        border: theme.accentColor === color ? '3px solid #111827' : 'none'
+                        background: '#EFF6FF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 8px'
                       }}
-                    />
-                  ))}
+                    >
+                      <Upload size={20} color={customizerDraft.accentColor || '#007AFF'} />
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>
+                      Click to Upload Restaurant Brand Logo
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B' }}>
+                      PNG, JPG, SVG, WebP • Auto-optimized for instant multi-device synchronization
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Section B: Brand Identity Text */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                    Restaurant Name
+                  </label>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    value={customizerDraft.restaurantName}
+                    onChange={(e) => {
+                      setCustomizerDraft({ ...customizerDraft, restaurantName: e.target.value });
+                      setCustomizerSaveSuccess(false);
+                    }}
+                    placeholder="e.g. Advait Artisanal Kitchen"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                    Tagline / Cuisine Description
+                  </label>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    value={customizerDraft.tagline || ''}
+                    onChange={(e) => {
+                      setCustomizerDraft({ ...customizerDraft, tagline: e.target.value });
+                      setCustomizerSaveSuccess(false);
+                    }}
+                    placeholder="e.g. Progressive Indian Table & Craft Kitchen"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                    Customer Welcome Greeting
+                  </label>
+                  <input
+                    type="text"
+                    className="ios-input"
+                    value={customizerDraft.welcomeMessage}
+                    onChange={(e) => {
+                      setCustomizerDraft({ ...customizerDraft, welcomeMessage: e.target.value });
+                      setCustomizerSaveSuccess(false);
+                    }}
+                    placeholder="Scan table QR, order effortlessly, and track your kitchen ticket in real time."
+                  />
                 </div>
               </div>
 
+              {/* Section C: Brand Accent Color & Layout */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                    Brand Accent Color
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { hex: '#007AFF', label: 'Royal Blue' },
+                      { hex: '#10B981', label: 'Emerald' },
+                      { hex: '#8B5CF6', label: 'Purple' },
+                      { hex: '#F59E0B', label: 'Amber Gold' },
+                      { hex: '#E11D48', label: 'Rose Red' },
+                      { hex: '#0F172A', label: 'Midnight Slate' }
+                    ].map((col) => (
+                      <button
+                        key={col.hex}
+                        type="button"
+                        onClick={() => {
+                          playTapSound();
+                          setCustomizerDraft({ ...customizerDraft, accentColor: col.hex });
+                          setCustomizerSaveSuccess(false);
+                        }}
+                        title={col.label}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: '50%',
+                          background: col.hex,
+                          border: customizerDraft.accentColor.toLowerCase() === col.hex.toLowerCase()
+                            ? '3px solid #0F172A'
+                            : '2px solid #FFFFFF',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          padding: 0
+                        }}
+                      />
+                    ))}
+
+                    {/* Custom HTML5 Color Picker */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 4 }}>
+                      <input
+                        type="color"
+                        value={customizerDraft.accentColor}
+                        onChange={(e) => {
+                          setCustomizerDraft({ ...customizerDraft, accentColor: e.target.value });
+                          setCustomizerSaveSuccess(false);
+                        }}
+                        style={{
+                          width: 30,
+                          height: 30,
+                          padding: 0,
+                          border: '1px solid #CBD5E1',
+                          borderRadius: '50%',
+                          cursor: 'pointer',
+                          background: 'none'
+                        }}
+                        title="Pick custom color"
+                      />
+                      <span style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace', fontWeight: 600 }}>
+                        {customizerDraft.accentColor.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
+                    Customer Menu Layout
+                  </label>
+                  <select
+                    className="ios-select"
+                    value={customizerDraft.menuLayout}
+                    onChange={(e) => {
+                      setCustomizerDraft({ ...customizerDraft, menuLayout: e.target.value });
+                      setCustomizerSaveSuccess(false);
+                    }}
+                  >
+                    <option value="grid">Grid (Cards with rich photos)</option>
+                    <option value="list">Compact List (Fast navigation)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Section D: Instant UPI Merchant ID */}
               <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>Menu Layout</label>
-                <select
-                  className="ios-select"
-                  value={theme.menuLayout}
-                  onChange={(e) => setTheme({ ...theme, menuLayout: e.target.value })}
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                  UPI Merchant ID / VPA (Customer QR &amp; Instant App Payment)
+                </label>
+                <input
+                  type="text"
+                  className="ios-input"
+                  placeholder="e.g. 9119069179@nyes"
+                  value={customizerDraft.upiId || ''}
+                  onChange={(e) => {
+                    setCustomizerDraft({ ...customizerDraft, upiId: e.target.value.trim() });
+                    setCustomizerSaveSuccess(false);
+                  }}
+                />
+                <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
+                  Customer instant UPI QR code scans and app redirects (GPay, PhonePe, Paytm, CRED) will directly credit this UPI address.
+                </div>
+              </div>
+
+              {/* Section E: Live Interactive Customer Header Preview */}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <ImageIcon size={13} color={customizerDraft.accentColor || '#007AFF'} />
+                  <span>Live Customer Dining Preview</span>
+                </div>
+
+                <div
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: 16,
+                    padding: 14,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.04)'
+                  }}
                 >
-                  <option value="grid">Grid (Cards)</option>
-                  <option value="list">Compact List</option>
-                </select>
-              </div>
-            </div>
+                  {/* Mock Customer Header */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingBottom: 12,
+                      borderBottom: '1px solid #F1F5F9'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 10,
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          overflow: 'hidden',
+                          padding: 2
+                        }}
+                      >
+                        {customizerDraft.logo ? (
+                          <img
+                            src={customizerDraft.logo}
+                            alt="Logo preview"
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 13, fontWeight: 800, color: customizerDraft.accentColor }}>
+                            {(customizerDraft.restaurantName || 'AD').substring(0, 2).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>
+                          {customizerDraft.restaurantName || 'Your Restaurant'}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#16A34A', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 600 }}>
+                          <ShieldCheck size={10} color="#16A34A" /> FSSAI 5-Star Clean Dining
+                        </div>
+                      </div>
+                    </div>
 
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-                UPI Merchant ID / VPA (Customer QR & Instant App Payment)
-              </label>
-              <input
-                type="text"
-                className="ios-input"
-                placeholder="e.g. 9119069179@nyes"
-                value={theme.upiId || '9119069179@nyes'}
-                onChange={(e) => {
-                  const updated = { ...theme, upiId: e.target.value.trim() };
-                  setTheme(updated);
-                  broadcastSyncEvent(SYNC_EVENTS.THEME_UPDATED, updated);
-                }}
-              />
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>
-                Customer instant UPI QR code scans and app redirects (GPay, PhonePe, Paytm, CRED) will directly credit this UPI address.
-              </div>
-            </div>
+                    <div
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 20,
+                        background: `${customizerDraft.accentColor}1A`,
+                        color: customizerDraft.accentColor,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <Utensils size={10} />
+                      <span>Table 04</span>
+                    </div>
+                  </div>
 
-            <div style={{ background: '#F9FAFB', padding: 12, borderRadius: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>FSSAI Verified Chef Display</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {chef.name} is accredited and featured on top customer banner.
+                  {/* Mock Menu Banner */}
+                  <div style={{ paddingTop: 10 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A' }}>
+                      {customizerDraft.restaurantName || 'Your Restaurant'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                      {customizerDraft.welcomeMessage || 'Welcome to Table 04! Order fresh dishes directly to your table.'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section F: Prominent Save & Apply Button */}
+              <div style={{ marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn-primary-ios"
+                  onClick={handleSaveCustomizer}
+                  disabled={isSavingCustomizer}
+                  style={{
+                    width: '100%',
+                    padding: '14px 20px',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    background: customizerSaveSuccess ? '#16A34A' : (customizerDraft.accentColor || '#007AFF'),
+                    borderColor: customizerSaveSuccess ? '#16A34A' : (customizerDraft.accentColor || '#007AFF'),
+                    boxShadow: customizerSaveSuccess ? '0 4px 14px rgba(22, 163, 74, 0.35)' : `0 4px 14px ${customizerDraft.accentColor}40`,
+                    transition: 'all 0.2s ease',
+                    cursor: isSavingCustomizer ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {customizerSaveSuccess ? (
+                    <>
+                      <CheckCircle2 size={18} />
+                      <span>Settings &amp; Logo Saved and Synced!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      <span>{isSavingCustomizer ? 'Saving & Syncing...' : 'Save & Apply Customizer Settings'}</span>
+                    </>
+                  )}
+                </button>
+
+                <div style={{ fontSize: 11, color: '#64748B', textAlign: 'center', marginTop: 8 }}>
+                  ⚡ Real-Time Sync: Changes are saved to this restaurant business and broadcasted immediately (&lt;50ms) to customer dining phones, QR menus, and POS stations. Developer console remains strictly isolated.
+                </div>
               </div>
             </div>
           </div>
