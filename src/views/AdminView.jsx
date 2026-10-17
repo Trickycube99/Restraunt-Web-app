@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
   Receipt,
   Users,
+  User,
   Palette,
   TrendingUp,
   Download,
@@ -55,6 +56,7 @@ export default function AdminView({
   theme,
   setTheme,
   chef,
+  setChef,
   checklists: _checklists,
   offers = [],
   setOffers,
@@ -118,6 +120,20 @@ export default function AdminView({
   const [isSavingCustomizer, setIsSavingCustomizer] = useState(false);
   const logoInputRef = useRef(null);
 
+  // Chef Customizer Draft State & Handlers
+  const [chefDraft, setChefDraft] = useState(() => ({
+    name: chef?.name || 'Rakesh Sharma',
+    title: chef?.title || 'Executive Chef & Master Director',
+    portrait: chef?.portrait || '/assets/chef_portrait.jpg',
+    experienceYears: chef?.experienceYears || 18,
+    bio: chef?.bio || '',
+    philosophy: chef?.philosophy || '',
+    showVerifiedBadge: chef?.showVerifiedBadge ?? (chef?.isVerified ?? true),
+    showCredentials: chef?.showCredentials ?? true,
+    showHygienePledge: chef?.showHygienePledge ?? true
+  }));
+  const chefPhotoInputRef = useRef(null);
+
   // Sync draft when theme prop changes (React recommended pattern for adjusting state from props)
   const [prevTheme, setPrevTheme] = useState(theme);
   if (theme !== prevTheme) {
@@ -132,6 +148,70 @@ export default function AdminView({
       logo: theme?.logo || null
     });
   }
+
+  // Sync draft when chef prop changes
+  const [prevChef, setPrevChef] = useState(chef);
+  if (chef !== prevChef) {
+    setPrevChef(chef);
+    setChefDraft({
+      name: chef?.name || 'Rakesh Sharma',
+      title: chef?.title || 'Executive Chef & Master Director',
+      portrait: chef?.portrait || '/assets/chef_portrait.jpg',
+      experienceYears: chef?.experienceYears || 18,
+      bio: chef?.bio || '',
+      philosophy: chef?.philosophy || '',
+      showVerifiedBadge: chef?.showVerifiedBadge ?? (chef?.isVerified ?? true),
+      showCredentials: chef?.showCredentials ?? true,
+      showHygienePledge: chef?.showHygienePledge ?? true
+    });
+  }
+
+  // Handle chef photo upload with automatic canvas optimization
+  const handleChefPhotoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 320;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const ratio = Math.min(maxDim / w, maxDim / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+        setChefDraft((prev) => ({ ...prev, portrait: dataUrl }));
+        setCustomizerSaveSuccess(false);
+        playTapSound();
+      };
+      img.src = readerEvent.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetChefPhoto = () => {
+    playTapSound();
+    setChefDraft((prev) => ({ ...prev, portrait: '/assets/chef_portrait.jpg' }));
+    setCustomizerSaveSuccess(false);
+    if (chefPhotoInputRef.current) {
+      chefPhotoInputRef.current.value = '';
+    }
+  };
 
   // Handle logo image upload with automatic canvas optimization for fast sync
   const handleLogoUpload = (e) => {
@@ -192,8 +272,15 @@ export default function AdminView({
       ...customizerDraft
     };
 
+    const updatedChef = {
+      ...chef,
+      ...chefDraft,
+      isVerified: Boolean(chefDraft.showVerifiedBadge)
+    };
+
     // 1. Update state in parent App
     setTheme(updatedTheme);
+    if (setChef) setChef(updatedChef);
 
     // 2. Persist in active business record
     const activeBiz = getActiveBusiness();
@@ -203,18 +290,25 @@ export default function AdminView({
         tagline: customizerDraft.tagline,
         upiId: customizerDraft.upiId,
         accentColor: customizerDraft.accentColor,
-        logo: customizerDraft.logo
+        logo: customizerDraft.logo,
+        chef: updatedChef
       });
     }
 
-    // 3. Save scoped theme to localStorage
-    const scopedKey = activeBiz?.id && activeBiz.id !== 'biz_advait'
+    // 3. Save scoped theme and chef to localStorage
+    const scopedThemeKey = activeBiz?.id && activeBiz.id !== 'biz_advait'
       ? `${STORAGE_KEYS.THEME}_${activeBiz.id}`
       : STORAGE_KEYS.THEME;
-    saveData(scopedKey, updatedTheme);
+    saveData(scopedThemeKey, updatedTheme);
+
+    const scopedChefKey = activeBiz?.id && activeBiz.id !== 'biz_advait'
+      ? `${STORAGE_KEYS.CHEF}_${activeBiz.id}`
+      : STORAGE_KEYS.CHEF;
+    saveData(scopedChefKey, updatedChef);
 
     // 4. Real-time broadcast to all open windows/tabs (customer devices, POS terminals)
     broadcastSyncEvent(SYNC_EVENTS.THEME_UPDATED, updatedTheme);
+    broadcastSyncEvent(SYNC_EVENTS.CHEF_UPDATED, updatedChef);
 
     // 5. Success chime & UI feedback
     playSuccessChime();
@@ -2142,7 +2236,338 @@ export default function AdminView({
                 </div>
               </div>
 
-              {/* Section E: Live Interactive Customer Header Preview */}
+              {/* Section E: Executive Chef Profile & Credentials Studio */}
+              <div style={{ background: '#F8FAFC', border: '1.5px solid #E2E8F0', borderRadius: 16, padding: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <User size={16} color={customizerDraft.accentColor || '#007AFF'} />
+                      <span>About Chef Profile &amp; Accreditation Studio</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                      Customize the chef's portrait, biography, and choose whether to display official verification badges or accredited diplomas.
+                    </div>
+                  </div>
+
+                  {/* Quick Profile Presets */}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      className="btn-secondary-pill"
+                      onClick={() => {
+                        playTapSound();
+                        setChefDraft((prev) => ({
+                          ...prev,
+                          showVerifiedBadge: true,
+                          showCredentials: true,
+                          showHygienePledge: true
+                        }));
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{ fontSize: 11, padding: '5px 10px', background: '#F0FDF4', color: '#16A34A', borderColor: '#BBF7D0', fontWeight: 600 }}
+                      title="Turn ON all verification badges, diplomas and hygiene pledge"
+                    >
+                      <ShieldCheck size={12} color="#16A34A" />
+                      <span>Full Master Chef &amp; Accreditation</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn-secondary-pill"
+                      onClick={() => {
+                        playTapSound();
+                        setChefDraft((prev) => ({
+                          ...prev,
+                          showVerifiedBadge: false,
+                          showCredentials: false,
+                          showHygienePledge: false
+                        }));
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{ fontSize: 11, padding: '5px 10px', background: '#F1F5F9', color: '#475569', borderColor: '#CBD5E1', fontWeight: 600 }}
+                      title="Show ONLY chef portrait, name, designation & bio (Zero badges or diplomas)"
+                    >
+                      <Utensils size={12} color="#475569" />
+                      <span>Minimalist Profile (Name &amp; Story Only)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Hidden Chef Photo File Input */}
+                <input
+                  ref={chefPhotoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleChefPhotoUpload}
+                  style={{ display: 'none' }}
+                />
+
+                {/* Chef Photo Upload Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, padding: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+                    <img
+                      src={chefDraft.portrait || '/assets/chef_portrait.jpg'}
+                      alt="Chef portrait preview"
+                      style={{
+                        width: 72,
+                        height: 72,
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        border: `2.5px solid ${customizerDraft.accentColor || '#007AFF'}`,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}
+                    />
+                    {chefDraft.showVerifiedBadge && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          right: 0,
+                          background: '#007AFF',
+                          color: '#FFFFFF',
+                          borderRadius: '50%',
+                          width: 20,
+                          height: 20,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '2px solid #FFFFFF'
+                        }}
+                      >
+                        <CheckCircle2 size={11} strokeWidth={3} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Chef Portrait / Photo</div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8 }}>
+                      Upload high-resolution chef portrait or paste image link.
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn-secondary-pill"
+                        onClick={() => chefPhotoInputRef.current?.click()}
+                        style={{ fontSize: 12, padding: '6px 12px' }}
+                      >
+                        <Upload size={13} color="#007AFF" />
+                        <span>Upload Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary-pill"
+                        onClick={handleResetChefPhoto}
+                        style={{ fontSize: 12, padding: '6px 12px', color: '#64748B' }}
+                      >
+                        <span>Reset Default</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chef Text Fields: Name & Title */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Chef Name
+                    </label>
+                    <input
+                      type="text"
+                      className="ios-input"
+                      placeholder="e.g. Rakesh Sharma"
+                      value={chefDraft.name}
+                      onChange={(e) => {
+                        setChefDraft({ ...chefDraft, name: e.target.value });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Chef Designation / Title
+                    </label>
+                    <input
+                      type="text"
+                      className="ios-input"
+                      placeholder="e.g. Executive Chef & Master Director"
+                      value={chefDraft.title}
+                      onChange={(e) => {
+                        setChefDraft({ ...chefDraft, title: e.target.value });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Years of Culinary Mastery
+                    </label>
+                    <input
+                      type="number"
+                      className="ios-input"
+                      placeholder="18"
+                      value={chefDraft.experienceYears}
+                      onChange={(e) => {
+                        setChefDraft({ ...chefDraft, experienceYears: Number(e.target.value) || 0 });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Chef Text Fields: Bio & Philosophy */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 14 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Chef Biography &amp; Culinary Experience (Text)
+                    </label>
+                    <textarea
+                      className="ios-input"
+                      rows={3}
+                      placeholder="Describe the chef's culinary journey, background, and artisanal craft..."
+                      value={chefDraft.bio}
+                      onChange={(e) => {
+                        setChefDraft({ ...chefDraft, bio: e.target.value });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{ resize: 'vertical', minHeight: 65 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>
+                      Culinary Story &amp; Philosophy Quote
+                    </label>
+                    <textarea
+                      className="ios-input"
+                      rows={2}
+                      placeholder="Chef's personal food quote or philosophy..."
+                      value={chefDraft.philosophy}
+                      onChange={(e) => {
+                        setChefDraft({ ...chefDraft, philosophy: e.target.value });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{ resize: 'vertical', minHeight: 50 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Section E Toggles: Verification Badges & Credentials Section */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', marginBottom: 2 }}>
+                    Display &amp; Verification Toggles:
+                  </div>
+
+                  {/* Toggle 1: Show Verified Badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ShieldCheck size={14} color="#16A34A" />
+                        <span>Show Verified Master Chef Badge &amp; FSSAI Audit Button</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>
+                        Displays "Officially Verified Master Chef" badge, portrait checkmark, and FSSAI hash audit verification button.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTapSound();
+                        setChefDraft({ ...chefDraft, showVerifiedBadge: !chefDraft.showVerifiedBadge });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        border: 'none',
+                        background: chefDraft.showVerifiedBadge ? '#16A34A' : '#CBD5E1',
+                        color: '#FFFFFF',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {chefDraft.showVerifiedBadge ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+
+                  {/* Toggle 2: Show Accredited Diplomas & Audits */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Award size={14} color="#D97706" />
+                        <span>Show Accredited Diplomas &amp; Audits Credentials Section</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>
+                        Displays Government of India (IHM Pusa), Indian Culinary Forum (ICF), and FoSTaC certified diplomas grid.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTapSound();
+                        setChefDraft({ ...chefDraft, showCredentials: !chefDraft.showCredentials });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        border: 'none',
+                        background: chefDraft.showCredentials ? '#D97706' : '#CBD5E1',
+                        color: '#FFFFFF',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {chefDraft.showCredentials ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+
+                  {/* Toggle 3: Show Hygiene & Sourcing Pledge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Sparkles size={14} color="#8B5CF6" />
+                        <span>Show FSSAI Hygiene &amp; Quality Sourcing Pledge</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>
+                        Displays 100% stone-ground spices, pure A2 Gir cow ghee, and microbial testing quality pledge card.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTapSound();
+                        setChefDraft({ ...chefDraft, showHygienePledge: !chefDraft.showHygienePledge });
+                        setCustomizerSaveSuccess(false);
+                      }}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 20,
+                        border: 'none',
+                        background: chefDraft.showHygienePledge ? '#8B5CF6' : '#CBD5E1',
+                        color: '#FFFFFF',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {chefDraft.showHygienePledge ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section F: Live Interactive Customer Header & Chef Preview */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <ImageIcon size={13} color={customizerDraft.accentColor || '#007AFF'} />
@@ -2230,6 +2655,63 @@ export default function AdminView({
                     </div>
                     <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
                       {customizerDraft.welcomeMessage || 'Welcome to Table 04! Order fresh dishes directly to your table.'}
+                    </div>
+                  </div>
+
+                  {/* Mock Chef Profile Preview */}
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #F1F5F9' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+                      Live Chef Profile Dining Tab Preview:
+                    </div>
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 12, padding: 12 }}>
+                      {chefDraft.showVerifiedBadge && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span className="status-pill done" style={{ fontSize: 10, padding: '2px 8px' }}>
+                            <ShieldCheck size={11} /> Officially Verified Master Chef
+                          </span>
+                          <span style={{ fontSize: 10, color: '#64748B' }}>Lic: FSSAI-LIC-10026011009821</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
+                          <img
+                            src={chefDraft.portrait || '/assets/chef_portrait.jpg'}
+                            alt="Chef"
+                            style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${customizerDraft.accentColor || '#007AFF'}` }}
+                          />
+                          {chefDraft.showVerifiedBadge && (
+                            <div style={{ position: 'absolute', bottom: -2, right: -2, background: '#007AFF', color: '#FFF', borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <CheckCircle2 size={9} strokeWidth={3} />
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{chefDraft.name || 'Chef Name'}</div>
+                          <div style={{ fontSize: 11, color: '#64748B' }}>{chefDraft.title} • {chefDraft.experienceYears}+ Yrs Mastery</div>
+                        </div>
+                      </div>
+                      {chefDraft.bio && (
+                        <div style={{ fontSize: 11, color: '#475569', marginTop: 8, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                          {chefDraft.bio}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                        {chefDraft.showCredentials && (
+                          <span style={{ fontSize: 9.5, padding: '2px 6px', background: '#FEF3C7', color: '#B45309', borderRadius: 6, fontWeight: 600 }}>
+                            Govt. Accredited Diplomas
+                          </span>
+                        )}
+                        {chefDraft.showHygienePledge && (
+                          <span style={{ fontSize: 9.5, padding: '2px 6px', background: '#DCFCE7', color: '#15803D', borderRadius: 6, fontWeight: 600 }}>
+                            FSSAI Hygiene &amp; Sourcing
+                          </span>
+                        )}
+                        {!chefDraft.showCredentials && !chefDraft.showVerifiedBadge && !chefDraft.showHygienePledge && (
+                          <span style={{ fontSize: 9.5, padding: '2px 6px', background: '#F1F5F9', color: '#475569', borderRadius: 6, fontWeight: 600 }}>
+                            Minimalist Chef Profile Active
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

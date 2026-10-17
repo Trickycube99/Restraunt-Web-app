@@ -13,11 +13,16 @@ import {
 import { playTapSound, playSuccessChime } from '../utils/audio';
 import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
 
-export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
+export default function AboutChefView({ chef, menu, theme, onAddToCart, onGoToMenu }) {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedCert, setSelectedCert] = useState(null);
   const [verifiedCount, setVerifiedCount] = useState(2450);
   const [hasEndorsed, setHasEndorsed] = useState(false);
+
+  const showVerifiedBadge = Boolean(chef?.showVerifiedBadge ?? (chef?.isVerified ?? true));
+  const showCredentials = Boolean(chef?.showCredentials ?? true);
+  const showHygienePledge = Boolean(chef?.showHygienePledge ?? true);
+  const businessName = theme?.restaurantName || chef?.businessName || 'Artisanal Kitchen';
 
   // Find chef's signature items
   const signatureItems = menu.filter((item) => item.tags.includes("Chef's Pick") || item.tags.includes("Signature Special"));
@@ -60,37 +65,43 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
           <span>Back to Menu</span>
         </button>
 
-        <span className="status-pill done" style={{ fontSize: 11, padding: '4px 10px' }}>
-          <ShieldCheck size={12} />
-          <span>FSSAI 5-Star Certified</span>
-        </span>
+        {showVerifiedBadge && (
+          <span className="status-pill done" style={{ fontSize: 11, padding: '4px 10px' }}>
+            <ShieldCheck size={12} />
+            <span>FSSAI 5-Star Certified</span>
+          </span>
+        )}
       </div>
 
       {/* Header section with screen title and subtitle */}
       <div style={{ marginBottom: 16 }}>
         <div className="screen-title">About the Chef</div>
         <div className="screen-subtitle">
-          Transparent culinary craftsmanship & verified Indian accreditation.
+          {showVerifiedBadge
+            ? 'Transparent culinary craftsmanship & verified Indian accreditation.'
+            : 'Culinary craftsmanship, passion & fine dining experience.'}
         </div>
       </div>
 
       {/* Main Chef Verified Profile Card */}
       <div className="ios-card active-gradient" style={{ marginBottom: 18, paddingTop: 20 }}>
         {/* Top Badges */}
-        <div className="card-top-row">
-          <div className="status-pill done">
-            <ShieldCheck size={13} />
-            <span>Officially Verified Master Chef</span>
+        {showVerifiedBadge && (
+          <div className="card-top-row">
+            <div className="status-pill done">
+              <ShieldCheck size={13} />
+              <span>Officially Verified Master Chef</span>
+            </div>
+            {chef?.verificationId && <span className="card-meta-text">Lic: {chef.verificationId}</span>}
           </div>
-          <span className="card-meta-text">Lic: {chef.verificationId}</span>
-        </div>
+        )}
 
         {/* Chef Portrait & Core Title */}
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginTop: 8, marginBottom: 14 }}>
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <img
-              src={chef.portrait}
-              alt={chef.name}
+              src={chef?.portrait || '/assets/chef_portrait.jpg'}
+              alt={chef?.name || 'Chef'}
               style={{
                 width: 86,
                 height: 86,
@@ -100,79 +111,85 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
                 boxShadow: '0 4px 14px rgba(0, 122, 255, 0.25)'
               }}
             />
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 2,
-                right: 2,
-                background: '#007AFF',
-                color: '#FFFFFF',
-                borderRadius: '50%',
-                width: 22,
-                height: 22,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: '2px solid #FFFFFF'
-              }}
-            >
-              <CheckCircle2 size={13} strokeWidth={3} />
-            </div>
+            {showVerifiedBadge && (
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 2,
+                  right: 2,
+                  background: '#007AFF',
+                  color: '#FFFFFF',
+                  borderRadius: '50%',
+                  width: 22,
+                  height: 22,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid #FFFFFF'
+                }}
+              >
+                <CheckCircle2 size={13} strokeWidth={3} />
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <div className="card-heading" style={{ fontSize: 19 }}>
-              {chef.name}
+              {chef?.name || 'Master Chef'}
             </div>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
-              {chef.title}
+              {chef?.title || 'Executive Chef & Culinary Director'}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-              📍 {chef.businessName} • {chef.experienceYears}+ Yrs Mastery
+              📍 {businessName} • {chef?.experienceYears || 15}+ Yrs Mastery
             </div>
           </div>
         </div>
 
-        {/* Key Verification Metrics */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 6,
-            background: 'rgba(255, 255, 255, 0.9)',
-            border: '1px solid #E5E7EB',
-            borderRadius: 14,
-            padding: '10px 6px',
-            marginBottom: 14,
-            textAlign: 'center'
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#16A34A' }}>{chef.hygieneScore}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>FSSAI Hygiene</div>
-          </div>
-          <div style={{ borderLeft: '1px solid #E5E7EB', borderRight: '1px solid #E5E7EB' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary-blue)' }}>5-Star A+</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Clean Dining</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#9333EA' }}>{chef.certifications?.length || 4} Badges</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Govt. Audited</div>
-          </div>
-        </div>
+        {/* Key Verification Metrics & Audit Button */}
+        {showVerifiedBadge && (
+          <>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.9)',
+                border: '1px solid #E5E7EB',
+                borderRadius: 14,
+                padding: '10px 6px',
+                marginBottom: 14,
+                textAlign: 'center'
+              }}
+            >
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#16A34A' }}>{chef?.hygieneScore || '99.4%'}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>FSSAI Hygiene</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #E5E7EB', borderRight: '1px solid #E5E7EB' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary-blue)' }}>5-Star A+</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Clean Dining</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#9333EA' }}>{chef?.certifications?.length || 4} Badges</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>Govt. Audited</div>
+              </div>
+            </div>
 
-        {/* Verification Action Button */}
-        <button
-          className="btn-primary-pill full-width"
-          style={{ padding: '10px 16px', fontSize: 14 }}
-          onClick={() => {
-            playTapSound();
-            setShowVerifyModal(true);
-          }}
-        >
-          <FileCheck2 size={16} />
-          <span>Verify Official FSSAI License & Audit Hash</span>
-        </button>
+            {/* Verification Action Button */}
+            <button
+              className="btn-primary-pill full-width"
+              style={{ padding: '10px 16px', fontSize: 14 }}
+              onClick={() => {
+                playTapSound();
+                setShowVerifyModal(true);
+              }}
+            >
+              <FileCheck2 size={16} />
+              <span>Verify Official FSSAI License & Audit Hash</span>
+            </button>
+          </>
+        )}
 
         {/* Bottom Card Progress Bar */}
         <div className="card-bottom-progress">
@@ -212,114 +229,118 @@ export default function AboutChefView({ chef, menu, onAddToCart, onGoToMenu }) {
         </div>
       </div>
 
-      {/* Official Culinary Certifications Section */}
-      <div className="ios-card" style={{ marginBottom: 16 }}>
-        <div className="card-top-row">
-          <div className="card-title-group">
-            <span className="card-heading">Accredited Diplomas & Audits</span>
-            <span className="card-meta-text">Government of India & ICF verified credentials</span>
-          </div>
-          <Award size={18} color="#D97706" />
-        </div>
-
-        <div className="certifications-grid">
-          {chef.certifications.map((cert) => (
-            <div
-              key={cert.id}
-              onClick={() => {
-                playTapSound();
-                setSelectedCert(cert);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '10px 12px',
-                background: '#F9FAFB',
-                border: '1px solid #E5E7EB',
-                borderRadius: 14,
-                cursor: 'pointer',
-                transition: 'background 0.15s ease',
-                gap: 8,
-                minWidth: 0
-              }}
-            >
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0, flex: 1 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 10,
-                    background: '#FEF3C7',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#D97706',
-                    flexShrink: 0
-                  }}
-                >
-                  <Award size={16} />
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {cert.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {cert.issuer} • {cert.year}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                <span className="status-pill done" style={{ fontSize: 10, padding: '2px 6px', whiteSpace: 'nowrap' }}>
-                  {cert.badge}
-                </span>
-                <ChevronRight size={14} color="#9CA3AF" />
-              </div>
+      {/* Official Culinary Certifications Section - Accredited Diplomas & Audits */}
+      {showCredentials && chef?.certifications && chef.certifications.length > 0 && (
+        <div className="ios-card" style={{ marginBottom: 16 }}>
+          <div className="card-top-row">
+            <div className="card-title-group">
+              <span className="card-heading">Accredited Diplomas & Audits</span>
+              <span className="card-meta-text">Government of India & ICF verified credentials</span>
             </div>
-          ))}
+            <Award size={18} color="#D97706" />
+          </div>
+
+          <div className="certifications-grid">
+            {chef.certifications.map((cert) => (
+              <div
+                key={cert.id}
+                onClick={() => {
+                  playTapSound();
+                  setSelectedCert(cert);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  background: '#F9FAFB',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 14,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                  gap: 8,
+                  minWidth: 0
+                }}
+              >
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 10,
+                      background: '#FEF3C7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#D97706',
+                      flexShrink: 0
+                    }}
+                  >
+                    <Award size={16} />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {cert.name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {cert.issuer} • {cert.year}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span className="status-pill done" style={{ fontSize: 10, padding: '2px 6px', whiteSpace: 'nowrap' }}>
+                    {cert.badge}
+                  </span>
+                  <ChevronRight size={14} color="#9CA3AF" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Hygiene & Sourcing Pledge Card */}
-      <div className="ios-card completed-gradient" style={{ marginBottom: 16 }}>
-        <div className="card-top-row">
-          <div className="card-title-group">
-            <span className="card-heading">FSSAI Hygiene & Organic Sourcing</span>
-            <span className="card-meta-text">Uncompromising food safety & farm transparency</span>
+      {showHygienePledge && chef?.hygieneAndQualityPledge && chef.hygieneAndQualityPledge.length > 0 && (
+        <div className="ios-card completed-gradient" style={{ marginBottom: 16 }}>
+          <div className="card-top-row">
+            <div className="card-title-group">
+              <span className="card-heading">FSSAI Hygiene & Organic Sourcing</span>
+              <span className="card-meta-text">Uncompromising food safety & farm transparency</span>
+            </div>
+            <ShieldCheck size={20} color="#16A34A" />
           </div>
-          <ShieldCheck size={20} color="#16A34A" />
-        </div>
 
-        <ul className="body-subtask">
-          {chef.hygieneAndQualityPledge.map((pledge, idx) => (
-            <li key={idx}>{pledge}</li>
-          ))}
-        </ul>
+          <ul className="body-subtask">
+            {chef.hygieneAndQualityPledge.map((pledge, idx) => (
+              <li key={idx}>{pledge}</li>
+            ))}
+          </ul>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            Diners Verified: <strong>{verifiedCount}</strong>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Diners Verified: <strong>{verifiedCount}</strong>
+            </div>
+            <button
+              className={`btn-secondary-pill`}
+              onClick={handleEndorse}
+              style={{
+                padding: '6px 12px',
+                fontSize: 12,
+                background: hasEndorsed ? '#DCFCE7' : '#F3F4F6',
+                color: hasEndorsed ? '#16A34A' : '#111827'
+              }}
+            >
+              <Heart size={13} fill={hasEndorsed ? '#16A34A' : 'none'} color={hasEndorsed ? '#16A34A' : 'currentColor'} />
+              <span>{hasEndorsed ? 'Verified & Endorsed' : 'Endorse Chef Standard'}</span>
+            </button>
           </div>
-          <button
-            className={`btn-secondary-pill`}
-            onClick={handleEndorse}
-            style={{
-              padding: '6px 12px',
-              fontSize: 12,
-              background: hasEndorsed ? '#DCFCE7' : '#F3F4F6',
-              color: hasEndorsed ? '#16A34A' : '#111827'
-            }}
-          >
-            <Heart size={13} fill={hasEndorsed ? '#16A34A' : 'none'} color={hasEndorsed ? '#16A34A' : 'currentColor'} />
-            <span>{hasEndorsed ? 'Verified & Endorsed' : 'Endorse Chef Standard'}</span>
-          </button>
-        </div>
 
-        <div className="card-bottom-progress">
-          <div className="card-bottom-progress-fill done" style={{ width: '100%' }} />
+          <div className="card-bottom-progress">
+            <div className="card-bottom-progress-fill done" style={{ width: '100%' }} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Signature Dishes Spotlight */}
       <div className="ios-card" style={{ marginBottom: 16 }}>

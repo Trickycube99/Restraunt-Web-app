@@ -1615,10 +1615,18 @@ export default function CustomerView({
             cursor: 'pointer',
             transition: 'all 0.15s ease'
           }}
-          title="Tap to view verified Executive Chef credentials & FSSAI audit"
+          title={chef?.showVerifiedBadge !== false ? "Tap to view verified Executive Chef credentials & FSSAI audit" : "Tap to learn about our Executive Chef & culinary story"}
         >
-          <ShieldCheck size={13} color="#16A34A" />
-          <span>{language === 'hi' ? `शेफ ${chef?.name || 'अद्वैत'} व FSSAI प्रमाण देखें` : `About Chef ${chef?.name || 'Advait'} & Credentials`}</span>
+          {chef?.showVerifiedBadge !== false ? (
+            <ShieldCheck size={13} color="#16A34A" />
+          ) : (
+            <Sparkles size={13} color="#007AFF" />
+          )}
+          <span>
+            {language === 'hi'
+              ? (chef?.showVerifiedBadge !== false ? `शेफ ${chef?.name || 'अद्वैत'} व FSSAI प्रमाण देखें` : `शेफ ${chef?.name || 'अद्वैत'} के बारे में जानें`)
+              : (chef?.showVerifiedBadge !== false ? `About Chef ${chef?.name || 'Advait'} & Credentials` : `About Chef ${chef?.name || 'Advait'}`)}
+          </span>
           <ChevronRight size={12} color="#94A3B8" />
         </button>
       </div>

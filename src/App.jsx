@@ -49,7 +49,7 @@ export default function App() {
 
   // Global Shared States (Persisted in localStorage scoped by active business)
   const [menu, setMenu] = useState(() => loadData(getScopedKey(STORAGE_KEYS.MENU, initialBizId), initialMenu));
-  const [chef, setChef] = useState(() => loadData(STORAGE_KEYS.CHEF, verifiedChefData));
+  const [chef, setChef] = useState(() => loadData(getScopedKey(STORAGE_KEYS.CHEF, initialBizId), verifiedChefData));
   const [orders, setOrders] = useState(() => {
     const loaded = loadData(getScopedKey(STORAGE_KEYS.ORDERS, initialBizId), isDefaultBiz ? initialOrders : []);
     return loaded.map((o) =>
@@ -186,6 +186,8 @@ export default function App() {
         setChecklists((prev) => [msg.payload, ...prev]);
       } else if (msg.type === SYNC_EVENTS.THEME_UPDATED) {
         if (msg.payload) setTheme(msg.payload);
+      } else if (msg.type === SYNC_EVENTS.CHEF_UPDATED) {
+        if (msg.payload) setChef(msg.payload);
       }
     });
 
@@ -319,6 +321,7 @@ export default function App() {
     } : {};
 
     setMenu(loadedMenu);
+    setChef(loadData(getScopedKey(STORAGE_KEYS.CHEF, bizId), verifiedChefData));
     setOrders(loadedOrders);
     setExpenses(loadedExpenses);
     setStaff(loadedStaff);
@@ -553,6 +556,7 @@ export default function App() {
               <AboutChefView
                 chef={chef}
                 menu={menu}
+                theme={theme}
                 onAddToCart={(item) => {
                   setCart((prev) => [...prev, { ...item, quantity: 1, note: "Chef's Signature Recommendation" }]);
                   setCurrentRole('customer');
@@ -617,6 +621,7 @@ export default function App() {
               theme={theme}
               setTheme={setTheme}
               chef={chef}
+              setChef={setChef}
               checklists={checklists}
               offers={offers}
               setOffers={setOffers}
