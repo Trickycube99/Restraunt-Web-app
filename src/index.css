@@ -308,10 +308,6 @@ html, body {
   font-weight: 700;
 }
 
-.nav-badge-pill.kds {
-  background: #0284C7;
-}
-
 /* Header Right: Actions */
 .header-right {
   display: flex;
@@ -1217,7 +1213,6 @@ html, body {
 .auth-role-avatar.role-customer { background: #EFF6FF; border-color: #BFDBFE; }
 .auth-role-avatar.role-chef { background: #F0FDF4; border-color: #BBF7D0; }
 .auth-role-avatar.role-counter { background: #FEF3C7; border-color: #FDE68A; }
-.auth-role-avatar.role-kds { background: #F0F9FF; border-color: #BAE6FD; }
 .auth-role-avatar.role-admin { background: #F5F3FF; border-color: #DDD6FE; }
 
 .auth-role-badge {

@@ -18,10 +18,10 @@ import {
   Volume2,
   VolumeX,
   Globe,
-  Cloud
+  Cloud,
+  Server
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
-import { canKdsReturnToAdmin, canKdsReturnToCounter } from '../utils/auth';
 import { getCloudSyncState, subscribeCloudSyncState } from '../utils/sync';
 import CloudSyncModal from './CloudSyncModal';
 
@@ -241,7 +241,7 @@ export default function Header({
   }
 
   // -------------------------------------------------------------
-  // 2. DEDICATED STAFF WORKSTATION HEADER (Counterperson / KDS / Admin)
+  // 2. DEDICATED STAFF WORKSTATION HEADER (Counterperson / Admin)
   // High-productivity terminal with station switching, alerts & session locking
   // -------------------------------------------------------------
   return (
@@ -252,20 +252,14 @@ export default function Header({
           <div className="brand-pill staff-station-pill">
             <div className="brand-avatar-box staff-avatar">
               {currentRole === 'counter' && <Layers size={16} color="#FFFFFF" />}
-              {currentRole === 'kds' && <Monitor size={16} color="#FFFFFF" />}
               {currentRole === 'admin' && <BarChart3 size={16} color="#FFFFFF" />}
-              {currentRole === 'chef' && <ShieldCheck size={16} color="#FFFFFF" />}
             </div>
             <div className="brand-info">
               <div className="brand-name-row">
                 <span className="brand-title">
                   {currentRole === 'counter'
                     ? 'POS Terminal 01'
-                    : currentRole === 'kds'
-                    ? 'Kitchen KDS Display'
-                    : currentRole === 'admin'
-                    ? 'Owner Executive Back-Office'
-                    : 'Verified Chef Portfolio'}
+                    : 'Owner Executive Back-Office'}
                 </span>
                 <span className="staff-online-dot" title="Workstation Online" />
               </div>
@@ -307,8 +301,53 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center: Workstation Switching (Enforces Role Hierarchy: Admin -> All, Counter -> KDS only, Kitchen -> Locked) */}
+        {/* Center: Workstation Switching (Admin, Counterperson POS, Customer Menu) */}
         <nav className="header-center-nav staff-center-nav">
+          {/* Developer Superadmin has Master Access */}
+          {currentRole === 'developer' && (
+            <>
+              <button
+                className="nav-role-pill active"
+                onClick={() => onRoleSwitch('developer')}
+                title="Developer Superadmin Console"
+                style={{ background: '#0F172A', color: '#38BDF8', borderColor: '#38BDF8' }}
+              >
+                <Server size={14} color="#38BDF8" />
+                <span>Dev Console</span>
+              </button>
+
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('admin')}
+                title="Switch to Active Business Owner Admin"
+              >
+                <BarChart3 size={14} />
+                <span>Owner Admin</span>
+              </button>
+
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('counter')}
+                title="Switch to Live Counter POS"
+              >
+                <Layers size={14} />
+                <span>Live POS</span>
+                {activeOrdersCount > 0 && (
+                  <span className="nav-badge-pill">{activeOrdersCount}</span>
+                )}
+              </button>
+
+              <button
+                className="nav-role-pill"
+                onClick={() => onRoleSwitch('customer')}
+                title="Preview Customer QR Dining Experience"
+              >
+                <Utensils size={14} color="#007AFF" />
+                <span>Customer Menu</span>
+              </button>
+            </>
+          )}
+
           {/* Admin has Master Access across all stations */}
           {currentRole === 'admin' && (
             <>
@@ -335,28 +374,16 @@ export default function Header({
 
               <button
                 className="nav-role-pill"
-                onClick={() => onRoleSwitch('kds')}
-                title="Admin Switching to Kitchen KDS Screen"
+                onClick={() => onRoleSwitch('customer')}
+                title="Preview Customer QR Dining Experience"
               >
-                <Monitor size={14} color="#38BDF8" />
-                <span>Kitchen KDS</span>
-                {activeOrdersCount > 0 && (
-                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
-                )}
-              </button>
-
-              <button
-                className="nav-role-pill"
-                onClick={() => onRoleSwitch('chef')}
-                title="Chef Credentials & Recipe Spec"
-              >
-                <ShieldCheck size={14} color="#007AFF" />
-                <span>Chef Page</span>
+                <Utensils size={14} color="#007AFF" />
+                <span>Customer Menu</span>
               </button>
             </>
           )}
 
-          {/* Counterperson: Can access Counter and ONLY Kitchen (Admin is strictly hidden) */}
+          {/* Counterperson: Can access Counter POS (and Admin if logged in as Admin) */}
           {currentRole === 'counter' && (
             <>
               <button
@@ -368,18 +395,6 @@ export default function Header({
                 <span>Live POS</span>
                 {activeOrdersCount > 0 && (
                   <span className="nav-badge-pill">{activeOrdersCount}</span>
-                )}
-              </button>
-
-              <button
-                className="nav-role-pill"
-                onClick={() => onRoleSwitch('kds')}
-                title="Counterperson Switching to Kitchen KDS (Authorized)"
-              >
-                <Monitor size={14} color="#38BDF8" />
-                <span>Kitchen KDS</span>
-                {activeOrdersCount > 0 && (
-                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
                 )}
               </button>
 
@@ -395,95 +410,14 @@ export default function Header({
                   <span>Owner Admin</span>
                 </button>
               )}
-            </>
-          )}
-
-          {/* Kitchen KDS: Locked to KDS Station for direct kitchen logins. Can return to Admin or Counter if accessed by them */}
-          {currentRole === 'kds' && (
-            <>
-              <div
-                className="nav-role-pill active"
-                style={{ cursor: 'default', background: 'rgba(56, 189, 248, 0.15)', borderColor: '#38BDF8', color: '#38BDF8' }}
-                title={
-                  canKdsReturnToAdmin(authSessions)
-                    ? 'Kitchen Station (Accessed by Owner Admin)'
-                    : canKdsReturnToCounter(authSessions)
-                    ? 'Kitchen Station (Accessed by Counter Cashier)'
-                    : 'Kitchen Station Only (Locked from Admin and Counter)'
-                }
-              >
-                <Monitor size={14} color="#38BDF8" />
-                <span>
-                  {canKdsReturnToAdmin(authSessions)
-                    ? 'Kitchen KDS (Admin)'
-                    : canKdsReturnToCounter(authSessions)
-                    ? 'Kitchen KDS (Counter)'
-                    : 'Kitchen KDS (Station Locked)'}
-                </span>
-                {activeOrdersCount > 0 && (
-                  <span className="nav-badge-pill kds">{activeOrdersCount}</span>
-                )}
-              </div>
-
-              {/* If an Admin is viewing KDS, allow return to Admin Back-Office and Counter POS */}
-              {canKdsReturnToAdmin(authSessions) && (
-                <>
-                  <button
-                    className="nav-role-pill"
-                    onClick={() => onRoleSwitch('admin')}
-                    title="Return to Owner Admin Back-Office"
-                    style={{ borderColor: '#8B5CF6', color: '#8B5CF6', fontWeight: 700 }}
-                  >
-                    <BarChart3 size={14} />
-                    <span>← Owner Admin</span>
-                  </button>
-
-                  <button
-                    className="nav-role-pill"
-                    onClick={() => onRoleSwitch('counter')}
-                    title="Switch to Live Counter POS"
-                    style={{ borderColor: '#0284C7', color: '#0284C7' }}
-                  >
-                    <Layers size={14} />
-                    <span>Live POS</span>
-                  </button>
-                </>
-              )}
-
-              {/* If Counterperson (and not Admin) is viewing KDS, allow return to Counter POS */}
-              {canKdsReturnToCounter(authSessions) && !canKdsReturnToAdmin(authSessions) && (
-                <button
-                  className="nav-role-pill"
-                  onClick={() => onRoleSwitch('counter')}
-                  title="Return to Live Counter POS"
-                  style={{ borderColor: '#F59E0B', color: '#F59E0B', fontWeight: 700 }}
-                >
-                  <Layers size={14} />
-                  <span>← Back to POS</span>
-                </button>
-              )}
-            </>
-          )}
-
-          {/* Chef Portfolio */}
-          {currentRole === 'chef' && (
-            <>
-              <button
-                className="nav-role-pill active"
-                onClick={() => onRoleSwitch('chef')}
-                title="Chef Credentials & Recipe Spec"
-              >
-                <ShieldCheck size={14} color="#FFFFFF" />
-                <span>Chef Page</span>
-              </button>
 
               <button
                 className="nav-role-pill"
-                onClick={() => onRoleSwitch('kds')}
-                title="Culinary Inspection on Kitchen KDS"
+                onClick={() => onRoleSwitch('customer')}
+                title="Preview Customer QR Dining Experience"
               >
-                <Monitor size={14} color="#38BDF8" />
-                <span>Kitchen KDS</span>
+                <Utensils size={14} color="#007AFF" />
+                <span>Customer Menu</span>
               </button>
             </>
           )}
@@ -525,9 +459,9 @@ export default function Header({
 
           {/* Active Staff Operator Badge */}
           <div className="header-auth-profile-pill">
-            <User size={13} color="#007AFF" />
-            <span>{currentSession ? currentSession.name.split(' ')[0] : 'Staff'}</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
+            <User size={13} color={currentRole === 'developer' ? '#38BDF8' : '#007AFF'} />
+            <span>{currentRole === 'developer' ? 'Root Dev' : currentSession ? currentSession.name.split(' ')[0] : 'Staff'}</span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: currentRole === 'developer' ? '#38BDF8' : '#10B981' }} />
           </div>
 
           {/* Sound Alert Toggle */}
@@ -554,6 +488,20 @@ export default function Header({
           >
             <QrCode size={13} color="#007AFF" />
             <span className="qr-pill-label">Table QRs</span>
+          </button>
+
+          {/* Developer Superadmin Console Trigger */}
+          <button
+            className="btn-secondary-pill"
+            style={{ color: '#0891B2', borderColor: '#A5F3FC', background: '#F0FDFA', fontWeight: 600 }}
+            onClick={() => {
+              playTapSound();
+              onRoleSwitch('developer');
+            }}
+            title="Open Developer Superadmin Console"
+          >
+            <Server size={13} color="#0891B2" />
+            <span className="reset-label">Dev Console</span>
           </button>
 
           {/* Reset Demo Data Button */}

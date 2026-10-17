@@ -44,8 +44,7 @@ export default function CounterView({
   checklists,
   setChecklists,
   activeSubTab = 'orders',
-  setActiveSubTab,
-  onSwitchToKds
+  setActiveSubTab
 }) {
   const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'received', 'in-progress', 'ready', 'done'
   const [rejectOrderId, setRejectOrderId] = useState(null);
@@ -447,44 +446,49 @@ export default function CounterView({
           </div>
 
           {/* Quick Hardware & Station Status Bar */}
+          {/* Counter POS Operational Header Bar */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: '#0F172A',
+              background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
               color: '#F8FAFC',
               borderRadius: 14,
-              padding: '10px 14px',
+              padding: '12px 16px',
               marginBottom: 14,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.12)',
+              border: '1px solid #334155'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, background: '#1E293B', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Monitor size={16} color="#38BDF8" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Layers size={18} color="#F59E0B" />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#38BDF8' }}>
-                  Kitchen Display System (KDS)
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Live POS Orders Stack</span>
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 6, background: '#10B981', color: '#FFFFFF', fontWeight: 600 }}>Active</span>
                 </div>
                 <div style={{ fontSize: 11, color: '#94A3B8' }}>
-                  {orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length} Live Kitchen Prep Tickets
+                  {orders.filter((o) => o.status !== 'done' && o.status !== 'served' && o.status !== 'rejected').length} Live Kitchen Prep Tickets • 80mm GST Thermal Receipt Ready
                 </div>
               </div>
             </div>
-            {onSwitchToKds && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button
-                className="btn-primary-pill"
-                style={{ padding: '6px 12px', fontSize: 12, background: '#0284C7' }}
+                className="btn-secondary-pill"
+                style={{ padding: '6px 12px', fontSize: 11, background: '#1E293B', color: '#E2E8F0', borderColor: '#475569' }}
                 onClick={() => {
                   playTapSound();
-                  onSwitchToKds();
+                  setActiveSubTab('manual');
                 }}
+                title="Quick Punch New Walk-in Order"
               >
-                <span>Launch KDS</span>
+                <Plus size={13} color="#F59E0B" />
+                <span>+ Punch Order</span>
               </button>
-            )}
+            </div>
           </div>
 
           {/* Orders Feed (Responsive Multi-Column POS Grid) */}

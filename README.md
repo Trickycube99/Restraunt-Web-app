@@ -21,13 +21,12 @@ Advait Artisanal Indian Kitchen replaces traditional paper order pads, noisy sho
 2. **Floor Staff & Workstation Access (Role-Based Access Control)**:
    - Staff and owners access dedicated workstation screens through direct URLs or hash routes:
      - `/counter` or `#/counter` (Live Counterperson POS & Cashier)
-     - `/kds` or `#/kds` (Kitchen Display System)
      - `/admin` or `#/admin` (Owner Executive Back-Office)
      - `/portal` or `#/portal` (Floor Staff Station Portal)
    - **Enforced Access Matrix**:
-     - 👑 **Owner Admin (PIN: `8821`)**: Full master access. Can log in and switch between **Admin**, **Counter POS**, and **Kitchen KDS**.
-     - 💼 **Counter Person (PIN: `4421`)**: Can log in to **Counter POS** and **Kitchen KDS** ONLY. Admin Back-Office is strictly blocked.
-     - 🍳 **Kitchen Staff (PIN: `7700`)**: Station-locked to **Kitchen KDS** ONLY. Blocked from both Admin and Counter POS.
+     - 👑 **Owner Admin (PIN: `8821`)**: Full master access. Can log in and switch between **Admin** and **Counter POS**.
+     - 💼 **Counter Person (PIN: `4421`)**: Access to **Counter POS** ONLY. Admin Back-Office is strictly blocked.
+     - 🍽️ **Customer**: Seamless contactless QR dine-in ordering with zero login barriers.
    - Workstation banner displays operator name, live online status, role-filtered station switcher, sound alert mute toggle, table standee QR generator, and an "Exit Station / Lock" button to safely return to the diner menu.
 3. **Real-Time Cross-Tab / Cross-Device Synchronization**:
    - Powered by `BroadcastChannel` with storage fallbacks (<50ms latency).
@@ -145,7 +144,6 @@ vercel
 │   │   ├── CounterView.jsx         # Live Order Counter, POS Punch & EOD Checklist
 │   │   ├── CustomerView.jsx        # Customer QR Menu, Cart, UPI QR & Live Tracker
 │   │   ├── InventoryView.jsx       # Raw Ingredients Stock & Kitchen Wastage Logger
-│   │   ├── KdsView.jsx             # Kitchen Display System (KDS) Station Router
 │   │   ├── LoyaltyView.jsx         # Diners Club & VIP Rewards Vouchers
 │   │   └── MultiBranchView.jsx     # Multi-Branch Outlets Management (NCR & BLR)
 │   ├── App.css

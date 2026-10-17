@@ -2,18 +2,14 @@ import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Lock,
-  QrCode,
   Layers,
-  Monitor,
   BarChart3,
+  Server,
   KeyRound,
   User,
-  Phone,
-  Sparkles,
   AlertCircle,
   X,
   ChevronRight,
-  CheckCircle2,
   MapPin,
   Utensils
 } from 'lucide-react';
@@ -49,28 +45,33 @@ export default function AuthModal({
   useEffect(() => {
     if (!isOpen) return;
     setErrorMessage('');
-    if (currentStation === ROLES.ADMIN) {
+    if (currentStation === ROLES.DEVELOPER) {
+      setFormData({
+        email: '',
+        password: ''
+      });
+    } else if (currentStation === ROLES.ADMIN) {
       setFormData({
         name: '',
-        email: roleConfig.demoCredentials?.email || 'admin@advaitkitchen.com',
+        email: '',
         pin: ''
       });
     } else {
-      // Default to Counter
+      // Default to Counter (only PIN required, zero name prompt)
       setFormData({
-        terminal: roleConfig.demoCredentials?.terminal || 'POS-01 (Flagship CP)',
-        cashierName: '',
+        terminal: 'POS-01 (Flagship CP)',
         pin: ''
       });
     }
-  }, [currentStation, isOpen, roleConfig]);
+  }, [currentStation, isOpen]);
 
   if (!isOpen) return null;
 
-  // Only Counterperson POS and Owner Admin require authentication
+  // Station switcher tabs (No autofill button)
   const allTabs = [
     { id: ROLES.COUNTER, label: 'Counterperson POS', icon: Layers },
-    { id: ROLES.ADMIN, label: 'Owner Admin', icon: BarChart3 }
+    { id: ROLES.ADMIN, label: 'Business Owner Admin', icon: BarChart3 },
+    { id: ROLES.DEVELOPER, label: 'Developer Console', icon: Server }
   ];
 
   const allowedTabs = allTabs.filter((t) => {
@@ -79,25 +80,6 @@ export default function AuthModal({
     }
     return true;
   });
-
-  // Quick 1-tap demo credentials filler
-  const handleAutoFillDemo = () => {
-    playTapSound();
-    setErrorMessage('');
-    if (currentStation === ROLES.ADMIN) {
-      setFormData({
-        name: 'Sanjay Malhotra',
-        email: 'admin@advaitkitchen.com',
-        pin: '8821'
-      });
-    } else {
-      setFormData({
-        terminal: 'POS-01 (Flagship CP)',
-        cashierName: 'Rohan Verma',
-        pin: '4421'
-      });
-    }
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -112,7 +94,7 @@ export default function AuthModal({
       playSuccessChime();
       setTimeout(() => {
         setIsSubmitting(false);
-        onSuccess(result.session);
+        onSuccess(result.session, result.business);
       }, 200);
     } else {
       playAlertChime();
@@ -127,10 +109,8 @@ export default function AuthModal({
         return <Layers size={24} color="#F59E0B" />;
       case ROLES.ADMIN:
         return <BarChart3 size={24} color="#8B5CF6" />;
-      case ROLES.KDS:
-        return <Monitor size={24} color="#38BDF8" />;
-      case ROLES.CHEF:
-        return <ShieldCheck size={24} color="#16A34A" />;
+      case ROLES.DEVELOPER:
+        return <Server size={24} color="#06B6D4" />;
       default:
         return <Lock size={24} color="#007AFF" />;
     }
@@ -143,6 +123,7 @@ export default function AuthModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        style={{ maxWidth: 440 }}
       >
         {/* Modal Header */}
         <div className="auth-modal-header">
@@ -153,7 +134,7 @@ export default function AuthModal({
             <div>
               <div className="auth-role-badge">
                 <Lock size={11} />
-                <span>Restaurant Staff Station</span>
+                <span>Station Authentication</span>
               </div>
               <h3 className="auth-modal-title">{roleConfig.name}</h3>
             </div>
@@ -170,7 +151,7 @@ export default function AuthModal({
           </button>
         </div>
 
-        {/* Station Selector Tabs for Staff (Filtered by Permissions) */}
+        {/* Station Selector Tabs for Staff / Owner / Developer */}
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allowedTabs.length}, 1fr)`, gap: 6, margin: '10px 0 14px' }}>
           {allowedTabs.map((st) => (
             <button
@@ -178,44 +159,23 @@ export default function AuthModal({
               type="button"
               className={`btn-secondary-pill ${currentStation === st.id ? 'active' : ''}`}
               style={{
-                padding: '6px 4px',
+                padding: '7px 4px',
                 fontSize: 11,
+                fontWeight: 600,
                 justifyContent: 'center',
-                background: currentStation === st.id ? '#EFF6FF' : '#F9FAFB',
-                borderColor: currentStation === st.id ? '#007AFF' : '#E5E7EB',
-                color: currentStation === st.id ? '#007AFF' : 'var(--text-secondary)'
+                background: currentStation === st.id ? (st.id === ROLES.DEVELOPER ? '#ECFEFF' : '#EFF6FF') : '#F9FAFB',
+                borderColor: currentStation === st.id ? (st.id === ROLES.DEVELOPER ? '#06B6D4' : '#007AFF') : '#E5E7EB',
+                color: currentStation === st.id ? (st.id === ROLES.DEVELOPER ? '#0891B2' : '#007AFF') : 'var(--text-secondary)'
               }}
               onClick={() => {
                 playTapSound();
                 setCurrentStation(st.id);
               }}
             >
-              <st.icon size={12} />
+              <st.icon size={13} />
               <span>{st.label}</span>
             </button>
           ))}
-        </div>
-
-        {/* Access Matrix Summary Box */}
-        <div style={{
-          background: '#F0F9FF',
-          border: '1px solid #BAE6FD',
-          borderRadius: 10,
-          padding: '8px 10px',
-          fontSize: 11,
-          color: '#0369A1',
-          marginBottom: 12,
-          lineHeight: 1.45
-        }}>
-          <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, color: '#0284C7' }}>
-            <ShieldCheck size={13} />
-            <span>Role-Based Access Hierarchy:</span>
-          </div>
-          <div style={{ fontSize: 10.5, color: '#0C4A6E' }}>
-            • <b>Admin (8821):</b> Master access to Admin, Counter POS & Kitchen KDS<br />
-            • <b>Counter (4421):</b> Access to Counter POS & Kitchen KDS (Admin blocked)<br />
-            • <b>Kitchen (7700):</b> Access to Kitchen KDS ONLY (Counter & Admin blocked)
-          </div>
         </div>
 
         {/* Security Description */}
@@ -235,92 +195,45 @@ export default function AuthModal({
           </div>
         )}
 
-        {/* Dynamic Form based on Target Role */}
+        {/* Dynamic Form based on Target Role (Zero Autofill Button) */}
         <form onSubmit={handleSubmit} className="auth-modal-form">
-          {/* COUNTER POS FORM */}
+          {/* COUNTER POS FORM (PIN only - zero name prompt) */}
           {currentStation === ROLES.COUNTER && (
-            <>
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <User size={13} />
-                  <span>Cashier / Counterperson Name *</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter Cashier Name (e.g. Rohan Verma)"
-                  className="auth-input"
-                  value={formData.cashierName || ''}
-                  onChange={(e) => setFormData({ ...formData, cashierName: e.target.value })}
-                  autoFocus
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Staff 4-Digit POS PIN *</span>
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter POS PIN (Demo: 4421)"
-                  className="auth-input"
-                  maxLength={4}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <MapPin size={13} />
-                  <span>Cashier Terminal & Branch</span>
-                </label>
-                <select
-                  className="auth-input auth-select"
-                  value={formData.terminal || 'POS-01 (Flagship CP)'}
-                  onChange={(e) => setFormData({ ...formData, terminal: e.target.value })}
-                >
-                  <option value="POS-01 (Flagship CP)">POS-01 (Flagship CP, New Delhi)</option>
-                  <option value="POS-02 (Cyber Hub)">POS-02 (DLF Cyber Hub, Gurugram)</option>
-                  <option value="POS-03 (Indiranagar)">POS-03 (12th Main Indiranagar, BLR)</option>
-                </select>
-              </div>
-            </>
+            <div className="auth-input-group">
+              <label className="auth-label">
+                <KeyRound size={13} />
+                <span>Terminal 4-Digit POS PIN *</span>
+              </label>
+              <input
+                type="password"
+                required
+                autoFocus
+                placeholder="Enter 4-Digit POS PIN"
+                className="auth-input"
+                maxLength={6}
+                value={formData.pin || ''}
+                onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+              />
+              <span className="auth-hint">Enter your 4-digit counter terminal PIN to unlock the live POS.</span>
+            </div>
           )}
 
-          {/* ADMIN FORM */}
+          {/* ADMIN OWNER FORM */}
           {currentStation === ROLES.ADMIN && (
             <>
               <div className="auth-input-group">
                 <label className="auth-label">
                   <User size={13} />
-                  <span>Administrator / Owner Name *</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter Owner / Admin Name (e.g. Sanjay Malhotra)"
-                  className="auth-input"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  autoFocus
-                />
-              </div>
-
-              <div className="auth-input-group">
-                <label className="auth-label">
-                  <KeyRound size={13} />
-                  <span>Owner Executive Email *</span>
+                  <span>Business Owner Login Email *</span>
                 </label>
                 <input
                   type="email"
                   required
-                  placeholder="admin@advaitkitchen.com"
+                  placeholder="e.g. admin@advaitkitchen.com"
                   className="auth-input"
                   value={formData.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  autoFocus
                 />
               </div>
 
@@ -332,37 +245,56 @@ export default function AuthModal({
                 <input
                   type="password"
                   required
-                  placeholder="Enter Master PIN (Demo: 8821)"
+                  placeholder="Enter Master Owner PIN"
                   className="auth-input"
                   maxLength={8}
                   value={formData.pin || ''}
                   onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                 />
-                <span className="auth-hint">Protects P&L cash, sales analytics, payroll & accounting. Only Admin credentials permitted.</span>
+                <span className="auth-hint">Authenticates against your specific registered business account.</span>
               </div>
             </>
           )}
 
-          {/* 1-Tap Demo Credentials Helper */}
-          <div className="auth-demo-box">
-            <button
-              type="button"
-              className="auth-demo-btn"
-              onClick={handleAutoFillDemo}
-            >
-              <Sparkles size={14} color="#F59E0B" />
-              <span>1-Tap Demo Auto-Fill</span>
-            </button>
-            <div className="auth-demo-hint">
-              {currentStation === ROLES.COUNTER && 'Cashier PIN: 4421 • Admin Master: 8821 (Kitchen blocked)'}
-              {currentStation === ROLES.ADMIN && 'admin@advaitkitchen.com • PIN: 8821 (Admin Only - Staff blocked)'}
-              {currentStation === ROLES.KDS && 'Kitchen: 7700 • Counter: 4421 • Admin: 8821 (All Authorized)'}
-              {currentStation === ROLES.CHEF && 'Passkey PIN: 1002'}
-            </div>
-          </div>
+          {/* DEVELOPER SUPERADMIN FORM */}
+          {currentStation === ROLES.DEVELOPER && (
+            <>
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <Server size={13} />
+                  <span>Developer Superadmin Email *</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="dev@platform.com"
+                  className="auth-input"
+                  value={formData.email || ''}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  autoFocus
+                />
+              </div>
 
-          {/* Actions */}
-          <div className="auth-actions-row">
+              <div className="auth-input-group">
+                <label className="auth-label">
+                  <KeyRound size={13} />
+                  <span>Master Access Key / Password *</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter developer access key"
+                  className="auth-input"
+                  value={formData.password || ''}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                />
+                <span className="auth-hint">Full platform access to manage all tenant businesses.</span>
+              </div>
+            </>
+          )}
+
+          {/* Actions (Zero Autofill Button as requested) */}
+          <div className="auth-actions-row" style={{ marginTop: 14 }}>
             <button
               type="button"
               className="btn-secondary-pill auth-cancel-btn"
@@ -371,14 +303,17 @@ export default function AuthModal({
                 onClose();
               }}
             >
-              Back to Dining Menu
+              Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
               className="btn-primary-pill auth-submit-btn"
+              style={{
+                background: currentStation === ROLES.DEVELOPER ? 'linear-gradient(135deg, #06B6D4 0%, #0284C7 100%)' : undefined
+              }}
             >
-              <span>{isSubmitting ? 'Authenticating...' : `Unlock ${roleConfig.shortName}`}</span>
+              <span>{isSubmitting ? 'Verifying...' : `Unlock ${roleConfig.shortName}`}</span>
               <ChevronRight size={15} />
             </button>
           </div>

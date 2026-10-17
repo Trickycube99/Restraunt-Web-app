@@ -437,7 +437,7 @@ export default function CustomerView({
     }
   };
 
-  // Mandatory Diner Name Pop-up Modal Component
+  // Diner Name Pop-up Modal Component (Customer table ordering only)
   const renderNameModal = () => {
     if (!showNameModal) return null;
     return (
@@ -445,7 +445,7 @@ export default function CustomerView({
         style={{
           position: 'fixed',
           inset: 0,
-          zIndex: 99999,
+          zIndex: 1200,
           background: 'rgba(15, 23, 42, 0.75)',
           backdropFilter: 'blur(8px)',
           display: 'flex',
@@ -466,6 +466,33 @@ export default function CustomerView({
             position: 'relative'
           }}
         >
+          {/* Dismiss button */}
+          <button
+            type="button"
+            onClick={() => {
+              playTapSound();
+              setShowNameModal(false);
+            }}
+            style={{
+              position: 'absolute',
+              top: 14,
+              right: 14,
+              background: '#F3F4F6',
+              border: 'none',
+              borderRadius: '50%',
+              width: 28,
+              height: 28,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#6B7280'
+            }}
+            aria-label="Close"
+          >
+            <X size={15} />
+          </button>
+
           {/* Modal Header */}
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div

@@ -1,23 +1,33 @@
-// Auth Abstraction Layer for Advait Artisanal Indian Kitchen Restaurant OS
-// Provides interface-specific authentication, credential validation, session persistence, and role guards
+// Auth Abstraction Layer for Restaurant OS & Multi-Tenant Business Architecture
+// Supports Developer Superadmin, Distinct Business Owners, Counterperson POS, and Customer Dining
+
+import {
+  authenticateBusinessOwner,
+  authenticateCounterByPin,
+  authenticateDeveloper,
+  isDeveloperAuthenticated,
+  getActiveBusiness,
+  getBusinesses,
+  DEVELOPER_CREDENTIALS
+} from './businessManager';
 
 export const ROLES = {
   CUSTOMER: 'customer',
-  CHEF: 'chef',
   COUNTER: 'counter',
-  KDS: 'kds',
-  ADMIN: 'admin'
+  ADMIN: 'admin',
+  DEVELOPER: 'developer',
+  CHEF: 'chef'
 };
 
 export const AUTH_STORAGE_KEY = 'flowscape_auth_sessions_v2';
 
 export const ROLE_PERMISSIONS = {
-  // Admin can access: admin, counter, kds, chef, customer
-  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.COUNTER, ROLES.KDS, ROLES.CHEF, ROLES.CUSTOMER],
-  // Counter person can ONLY access: counter, kds, customer (NO ADMIN)
-  [ROLES.COUNTER]: [ROLES.COUNTER, ROLES.KDS, ROLES.CUSTOMER],
-  // Kitchen (KDS) can ONLY access: kds, customer (NO ADMIN, NO COUNTER)
-  [ROLES.KDS]: [ROLES.KDS, ROLES.CUSTOMER],
+  // Developer can access everything across all tenants
+  [ROLES.DEVELOPER]: [ROLES.DEVELOPER, ROLES.ADMIN, ROLES.COUNTER, ROLES.CUSTOMER, ROLES.CHEF],
+  // Admin can access: admin, counter, customer
+  [ROLES.ADMIN]: [ROLES.ADMIN, ROLES.COUNTER, ROLES.CUSTOMER, ROLES.CHEF],
+  // Counter person can ONLY access: counter, customer (NO ADMIN)
+  [ROLES.COUNTER]: [ROLES.COUNTER, ROLES.CUSTOMER],
   [ROLES.CHEF]: [ROLES.CHEF, ROLES.CUSTOMER],
   [ROLES.CUSTOMER]: [ROLES.CUSTOMER]
 };
@@ -28,6 +38,7 @@ export const ROLE_PERMISSIONS = {
 export function canRoleAccess(actorRole, targetRole) {
   if (targetRole === ROLES.CUSTOMER) return true;
   if (!actorRole) return false;
+  if (actorRole === ROLES.DEVELOPER) return true;
   const allowed = ROLE_PERMISSIONS[actorRole];
   return Boolean(allowed && allowed.includes(targetRole));
 }
@@ -39,7 +50,7 @@ export const ROLE_CONFIGS = {
     shortName: 'Diner',
     badge: 'Diner Check-In',
     securityLevel: 'Guest Table Session & Mobile Loyalty',
-    description: 'Browse curated Indian artisanal menu, place contactless table orders, and track live kitchen prep.',
+    description: 'Browse curated artisanal menu, place contactless table orders, and track live kitchen prep.',
     demoCredentials: {
       name: 'Aarav Sharma',
       phone: '9876543210',
@@ -66,10 +77,135 @@ export const ROLE_CONFIGS = {
     })
   },
 
+  [ROLES.COUNTER]: {
+    id: ROLES.COUNTER,
+    name: 'Live Counter & POS Terminal',
+    shortName: 'Cashier POS',
+    badge: 'POS Terminal Guard',
+    securityLevel: 'Staff POS 4-Digit Terminal PIN (Accessible by Counter & Admin)',
+    description: 'Accept live dining orders, apply custom item modifiers, print 80mm GST thermal receipts, and reconcile EOD cash.',
+    demoCredentials: {
+      terminal: 'POS-01 (Flagship CP)',
+      pin: '4421'
+    },
+    validate: (creds) => {
+      const pin = (creds?.pin || '').toString().trim();
+      if (!pin) {
+        return { valid: false, error: 'Please enter your 4-digit POS PIN.' };
+      }
+      const authRes = authenticateCounterByPin(pin, 'Counter Staff');
+      if (!authRes.success) {
+        return { valid: false, error: authRes.error };
+      }
+      return { valid: true, business: authRes.business, resolvedSession: authRes.session };
+    },
+    createSession: (creds, validationResult = null) => {
+      if (validationResult?.resolvedSession) {
+        return validationResult.resolvedSession;
+      }
+      const activeBiz = getActiveBusiness();
+      const pin = (creds?.pin || '').toString().trim();
+      const isAdminOverride = activeBiz.owner.pin === pin;
+      return {
+        role: ROLES.COUNTER,
+        businessId: activeBiz.id,
+        businessName: activeBiz.name,
+        name: isAdminOverride ? `${activeBiz.owner.name} (Admin Override)` : 'Counter Staff',
+        terminal: activeBiz.counter.terminalName || 'POS Terminal 01',
+        token: `pos_${activeBiz.id}_${Date.now()}`,
+        authenticatedAt: new Date().toISOString(),
+        authenticatedBy: isAdminOverride ? ROLES.ADMIN : ROLES.COUNTER
+      };
+    }
+  },
+
+  [ROLES.ADMIN]: {
+    id: ROLES.ADMIN,
+    name: 'Business Owner Back-Office',
+    shortName: 'Owner Admin',
+    badge: 'Business Owner Back-Office',
+    securityLevel: 'Master Financial Executive Dual-Factor (Owner Only)',
+    description: 'Real-time sales KPIs, P&L cash check, HDFC bank CSV reconciliation, automated payroll batches, and accounting exports.',
+    demoCredentials: {
+      name: 'Sanjay Malhotra',
+      email: 'admin@advaitkitchen.com',
+      pin: '8821'
+    },
+    validate: (creds) => {
+      const email = (creds?.email || '').trim().toLowerCase();
+      if (!email.includes('@') || !email.includes('.')) {
+        return { valid: false, error: 'Please enter a valid owner executive email address.' };
+      }
+      const pin = (creds?.pin || '').toString().trim();
+      if (!pin) {
+        return { valid: false, error: 'Please enter your 4-digit Owner Master PIN.' };
+      }
+
+      // Authenticate against multi-tenant business database
+      const authRes = authenticateBusinessOwner(email, pin);
+      if (!authRes.success) {
+        return { valid: false, error: authRes.error };
+      }
+
+      return { valid: true, business: authRes.business, resolvedSession: authRes.session };
+    },
+    createSession: (creds, validationResult = null) => {
+      if (validationResult?.resolvedSession) {
+        return validationResult.resolvedSession;
+      }
+      const activeBiz = getActiveBusiness();
+      return {
+        role: ROLES.ADMIN,
+        businessId: activeBiz.id,
+        businessName: activeBiz.name,
+        name: activeBiz.owner.name,
+        email: activeBiz.owner.email,
+        branch: activeBiz.city,
+        token: `admin_${activeBiz.id}_${Date.now()}`,
+        authenticatedAt: new Date().toISOString(),
+        authenticatedBy: ROLES.ADMIN
+      };
+    }
+  },
+
+  [ROLES.DEVELOPER]: {
+    id: ROLES.DEVELOPER,
+    name: 'Developer Superadmin Infrastructure',
+    shortName: 'Developer Console',
+    badge: 'Platform Root Access',
+    securityLevel: 'Master Developer Root Authentication',
+    description: 'Manage all tenant businesses, provision new business accounts, monitor real-time platform telemetry and database partitions.',
+    demoCredentials: {
+      email: DEVELOPER_CREDENTIALS.email,
+      password: DEVELOPER_CREDENTIALS.password
+    },
+    validate: (creds) => {
+      const email = (creds?.email || '').trim().toLowerCase();
+      const password = (creds?.password || creds?.pin || '').trim();
+      const authRes = authenticateDeveloper(email, password);
+      if (!authRes.success) {
+        return { valid: false, error: authRes.error };
+      }
+      return { valid: true, resolvedSession: authRes.session };
+    },
+    createSession: (creds, validationResult = null) => {
+      if (validationResult?.resolvedSession) {
+        return validationResult.resolvedSession;
+      }
+      return {
+        role: ROLES.DEVELOPER,
+        name: DEVELOPER_CREDENTIALS.name,
+        email: DEVELOPER_CREDENTIALS.email,
+        token: `dev_${Date.now()}`,
+        authenticatedAt: new Date().toISOString()
+      };
+    }
+  },
+
   [ROLES.CHEF]: {
     id: ROLES.CHEF,
     name: 'Verified Executive Chef',
-    shortName: 'Chef Advait',
+    shortName: 'Chef Story',
     badge: 'Culinary Master Audit',
     securityLevel: 'FSSAI Licensee & Culinary Master Passkey',
     description: 'Verify FSSAI laboratory audits, culinary provenance certifications, and curate signature menu items.',
@@ -77,163 +213,25 @@ export const ROLE_CONFIGS = {
       email: 'chef@advait.in',
       pin: '1002'
     },
-    validate: (creds) => {
-      const pin = (creds?.pin || '').toString().trim();
-      if (pin !== '1002' && pin !== '1234') {
-        return { valid: false, error: 'Incorrect Culinary Passkey. Demo Passkey is: 1002' };
-      }
-      return { valid: true };
-    },
-    createSession: (creds) => ({
+    validate: () => ({ valid: true }),
+    createSession: () => ({
       role: ROLES.CHEF,
       name: 'Chef Advait Kapoor',
       title: 'Executive Chef & Culinary Director',
       fssaiLicense: 'FSSAI Lic #10022001004812',
-      token: `chef_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      token: `chef_${Date.now()}`,
       authenticatedAt: new Date().toISOString()
-    })
-  },
-
-  [ROLES.COUNTER]: {
-    id: ROLES.COUNTER,
-    name: 'Live Counter & POS Terminal',
-    shortName: 'Cashier POS',
-    badge: 'POS Terminal Guard',
-    securityLevel: 'Staff POS 4-Digit Terminal PIN (Accessible by Counter & Admin)',
-    description: 'Accept live dining orders, apply custom item modifiers, print 80mm GST thermal receipts, and reconcile EOD cash. (Accessible by Counter & Admin; Kitchen blocked).',
-    demoCredentials: {
-      terminal: 'POS-01 (Flagship CP)',
-      cashierName: 'Rohan Verma',
-      pin: '4421'
-    },
-    validate: (creds) => {
-      const name = (creds?.cashierName || creds?.name || '').trim();
-      if (!name || name.length < 2) {
-        return { valid: false, error: 'Please enter your cashier / counter staff name.' };
-      }
-      const pin = (creds?.pin || '').toString().trim();
-      if (!pin) {
-        return { valid: false, error: 'Please enter your 4-digit POS PIN.' };
-      }
-      // Kitchen PIN 7700 is strictly blocked from Counter
-      if (pin === '7700') {
-        return { valid: false, error: 'Access Denied: Kitchen staff cannot access Counter POS Terminal.' };
-      }
-      // Counter PIN 4421 or Admin Master PIN 8821
-      if (pin !== '4421' && pin !== '8821' && pin !== '1234') {
-        return { valid: false, error: 'Invalid POS PIN. Enter Cashier PIN (4421) or Admin Master PIN (8821).' };
-      }
-      return { valid: true };
-    },
-    createSession: (creds) => {
-      const pin = (creds?.pin || '').toString().trim();
-      const isAdminOverride = pin === '8821';
-      const cleanName = (creds?.cashierName || creds?.name || '').trim();
-      return {
-        role: ROLES.COUNTER,
-        name: cleanName || (isAdminOverride ? 'Sanjay Malhotra (Owner / Admin Override)' : 'Rohan Verma'),
-        terminal: creds.terminal || 'POS-01 (Flagship CP)',
-        shift: 'Morning & Lunch Service',
-        token: `pos_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        authenticatedAt: new Date().toISOString(),
-        authenticatedBy: isAdminOverride ? ROLES.ADMIN : ROLES.COUNTER
-      };
-    }
-  },
-
-  [ROLES.KDS]: {
-    id: ROLES.KDS,
-    name: 'Kitchen Display System (KDS)',
-    shortName: 'Kitchen KDS',
-    badge: 'Kitchen Bump Station',
-    securityLevel: 'Kitchen Station Bump-Bar Security PIN (Accessible by Kitchen, Counter & Admin)',
-    description: 'High-contrast line cook prep display with real-time station filtering, bump timers, and ticket recall. (Accessible by Kitchen, Counter person, and Admin).',
-    demoCredentials: {
-      station: 'Hot Line & Tandoor Station',
-      leadName: 'Vikram Singh',
-      pin: '7700'
-    },
-    validate: (creds) => {
-      const pin = (creds?.pin || '').toString().trim();
-      // Kitchen PIN 7700, Counter PIN 4421, or Admin PIN 8821 all valid for Kitchen
-      if (pin !== '7700' && pin !== '4421' && pin !== '8821' && pin !== '1234') {
-        return { valid: false, error: 'Invalid PIN. Kitchen PIN: 7700, Counter PIN: 4421, or Admin PIN: 8821.' };
-      }
-      return { valid: true };
-    },
-    createSession: (creds) => {
-      const pin = (creds?.pin || '').toString().trim();
-      const isAdmin = pin === '8821';
-      const isCounter = pin === '4421';
-      return {
-        role: ROLES.KDS,
-        name: isAdmin
-          ? 'Sanjay Malhotra (Owner / Admin Access)'
-          : isCounter
-          ? 'Rohan Verma (POS Cashier / Counter Access)'
-          : (creds.leadName || 'Vikram Singh (Head Prep)'),
-        station: creds.station || 'Hot Line & Tandoor Station',
-        token: `kds_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        authenticatedAt: new Date().toISOString(),
-        authenticatedBy: isAdmin ? ROLES.ADMIN : isCounter ? ROLES.COUNTER : ROLES.KDS
-      };
-    }
-  },
-
-  [ROLES.ADMIN]: {
-    id: ROLES.ADMIN,
-    name: 'Owner & Executive Back-Office',
-    shortName: 'Owner Admin',
-    badge: 'Superadmin Multi-Branch',
-    securityLevel: 'Master Financial Executive Dual-Factor (Admin Only)',
-    description: 'Real-time sales KPIs, P&L cash check, HDFC bank CSV reconciliation, automated payroll batches, and Tally/Zoho accounting. (Strictly Admin only; Counter and Kitchen blocked).',
-    demoCredentials: {
-      name: 'Sanjay Malhotra',
-      email: 'admin@advaitkitchen.com',
-      pin: '8821'
-    },
-    validate: (creds) => {
-      const name = (creds?.name || '').trim();
-      if (!name || name.length < 2) {
-        return { valid: false, error: 'Please enter your administrator / owner name.' };
-      }
-      const pin = (creds?.pin || '').toString().trim();
-      // Kitchen PIN 7700 is strictly blocked
-      if (pin === '7700') {
-        return { valid: false, error: 'Access Denied: Kitchen staff cannot access Owner Back-Office.' };
-      }
-      // Counter PIN 4421 is strictly blocked (Counter can ONLY access Kitchen)
-      if (pin === '4421') {
-        return { valid: false, error: 'Access Denied: Counter staff cannot access Owner Back-Office. Counter permissions are limited to Counter POS and Kitchen KDS.' };
-      }
-      const email = (creds?.email || '').trim().toLowerCase();
-      if (!email.includes('@') || !email.includes('.')) {
-        return { valid: false, error: 'Please enter a valid owner executive email address.' };
-      }
-      if (pin !== '8821' && pin !== '1234') {
-        return { valid: false, error: 'Incorrect Master Owner PIN. Only Admin credentials (Demo PIN: 8821) can access Owner Back-Office.' };
-      }
-      return { valid: true };
-    },
-    createSession: (creds) => ({
-      role: ROLES.ADMIN,
-      name: (creds?.name || '').trim() || 'Sanjay Malhotra (Owner)',
-      email: creds.email || 'admin@advaitkitchen.com',
-      branch: 'All Outlets (Superadmin)',
-      token: `admin_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      authenticatedAt: new Date().toISOString(),
-      authenticatedBy: ROLES.ADMIN
     })
   }
 };
 
-// Initial default sessions for immediate, friction-free startup experience
+// Initial default sessions for immediate startup experience
 export const INITIAL_DEFAULT_SESSIONS = {
   [ROLES.CUSTOMER]: ROLE_CONFIGS[ROLES.CUSTOMER].createSession(ROLE_CONFIGS[ROLES.CUSTOMER].demoCredentials),
   [ROLES.CHEF]: ROLE_CONFIGS[ROLES.CHEF].createSession(ROLE_CONFIGS[ROLES.CHEF].demoCredentials),
-  [ROLES.COUNTER]: null, // Protected initially until logged in or demo 1-tapped
-  [ROLES.KDS]: null,     // Protected initially
-  [ROLES.ADMIN]: null    // Protected initially
+  [ROLES.COUNTER]: null,
+  [ROLES.ADMIN]: null,
+  [ROLES.DEVELOPER]: null
 };
 
 /**
@@ -243,7 +241,6 @@ export function getStoredSessions() {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) {
-      // Initialize with default customer & chef session
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(INITIAL_DEFAULT_SESSIONS));
       return INITIAL_DEFAULT_SESSIONS;
     }
@@ -267,17 +264,20 @@ export function saveStoredSessions(sessions) {
 
 /**
  * Check if a specific role is currently authenticated
- * Enforces role hierarchy:
- * - Admin can access Admin, Counter POS, and Kitchen KDS
- * - Counter can access Counter POS and Kitchen KDS (NO ADMIN)
- * - Kitchen can access Kitchen KDS ONLY (NO ADMIN, NO COUNTER)
  */
 export function isAuthenticated(role, activeSessionRole = null) {
-  // ONLY Counter and Admin interfaces ask for login!
-  // Customer, Chef, and Kitchen (KDS) open freely without any login gate.
-  if (role === ROLES.CUSTOMER || role === ROLES.CHEF || role === ROLES.KDS) {
+  if (role === ROLES.CUSTOMER || role === ROLES.CHEF) {
     return true;
   }
+  if (role === ROLES.DEVELOPER) {
+    return isDeveloperAuthenticated();
+  }
+
+  // Developer Superadmin has master clearance to inspect any role
+  if (isDeveloperAuthenticated() || activeSessionRole === ROLES.DEVELOPER) {
+    return true;
+  }
+
   const sessions = getStoredSessions();
   if (!sessions) return false;
 
@@ -286,17 +286,14 @@ export function isAuthenticated(role, activeSessionRole = null) {
     return true;
   }
 
-  // Active session role in state
   if (activeSessionRole === ROLES.ADMIN) {
     return true;
   }
 
-  // Counter session can access Counter POS
   if (role === ROLES.COUNTER && sessions[ROLES.COUNTER] && sessions[ROLES.COUNTER].token) {
     return true;
   }
 
-  // Direct active session for target role
   if (sessions[role] && sessions[role].token) {
     return true;
   }
@@ -326,74 +323,13 @@ export function authenticateRole(role, credentials) {
     return { success: false, error: validation.error };
   }
 
-  const session = config.createSession(credentials);
+  const session = config.createSession(credentials, validation);
   const currentSessions = getStoredSessions();
   currentSessions[role] = session;
 
-  const pin = (credentials?.pin || '').toString().trim();
-
-  // If Admin Master PIN was used to unlock Counter or Kitchen, also register the Admin session
-  if (pin === '8821' && !currentSessions[ROLES.ADMIN]) {
-    currentSessions[ROLES.ADMIN] = ROLE_CONFIGS[ROLES.ADMIN].createSession({
-      email: 'admin@advaitkitchen.com',
-      pin: '8821'
-    });
-  }
-
-  // If Counter PIN was used to unlock Kitchen, also register the Counter session
-  if (pin === '4421' && !currentSessions[ROLES.COUNTER]) {
-    currentSessions[ROLES.COUNTER] = ROLE_CONFIGS[ROLES.COUNTER].createSession({
-      terminal: 'POS-01 (Flagship CP)',
-      cashierName: 'Rohan Verma',
-      pin: '4421'
-    });
-  }
-
-  // If directly logging into Kitchen with Kitchen PIN 7700, strictly isolate station from Admin & Counter
-  if (role === ROLES.KDS && pin === '7700') {
-    currentSessions[ROLES.ADMIN] = null;
-    currentSessions[ROLES.COUNTER] = null;
-  }
-
   saveStoredSessions(currentSessions);
 
-  return { success: true, session };
-}
-
-/**
- * Check if the active user in Kitchen KDS has permission to return to Admin
- */
-export function canKdsReturnToAdmin(sessions = null) {
-  const activeSessions = sessions || getStoredSessions();
-  return Boolean(
-    activeSessions?.[ROLES.ADMIN]?.token ||
-    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.ADMIN
-  );
-}
-
-/**
- * Check if the active user in Kitchen KDS has permission to return to Counter
- */
-export function canKdsReturnToCounter(sessions = null) {
-  const activeSessions = sessions || getStoredSessions();
-  return Boolean(
-    activeSessions?.[ROLES.COUNTER]?.token ||
-    activeSessions?.[ROLES.ADMIN]?.token ||
-    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.COUNTER ||
-    activeSessions?.[ROLES.KDS]?.authenticatedBy === ROLES.ADMIN
-  );
-}
-
-/**
- * Check if the current user directly logged into Kitchen only (pure kitchen staff)
- */
-export function isDirectKitchenOnly(sessions = null) {
-  const activeSessions = sessions || getStoredSessions();
-  return Boolean(
-    activeSessions?.[ROLES.KDS]?.token &&
-    !canKdsReturnToAdmin(activeSessions) &&
-    !canKdsReturnToCounter(activeSessions)
-  );
+  return { success: true, session, business: validation.business };
 }
 
 /**
@@ -404,6 +340,9 @@ export function logoutRole(role) {
   if (currentSessions && currentSessions[role]) {
     currentSessions[role] = null;
     saveStoredSessions(currentSessions);
+  }
+  if (role === ROLES.DEVELOPER) {
+    localStorage.removeItem('flowscape_dev_session_v1');
   }
   return true;
 }

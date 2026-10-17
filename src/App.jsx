@@ -7,7 +7,7 @@ import CustomerView from './views/CustomerView';
 import AboutChefView from './views/AboutChefView';
 import CounterView from './views/CounterView';
 import AdminView from './views/AdminView';
-import KdsView from './views/KdsView';
+import DeveloperAdminView from './views/DeveloperAdminView';
 import {
   initialMenu,
   verifiedChefData,
@@ -24,11 +24,13 @@ import {
   isAuthenticated,
   getSession,
   logoutRole,
-  resetAllSessions,
-  canKdsReturnToAdmin,
-  canKdsReturnToCounter,
-  isDirectKitchenOnly
+  resetAllSessions
 } from './utils/auth';
+import {
+  getActiveBusiness,
+  setActiveBusiness,
+  isDeveloperAuthenticated
+} from './utils/businessManager';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
 import confetti from 'canvas-confetti';
@@ -63,8 +65,17 @@ export default function App() {
   const [cart, setCart] = useState([]);
   const [activeTable, setActiveTable] = useState('Table 04');
 
-  // Navigation & View State
-  const [currentRole, setCurrentRole] = useState('customer'); // 'customer' | 'chef' | 'counter' | 'kds' | 'admin'
+  // Navigation & View State (Dedicated Interfaces: Customer, Counter, Admin, Developer)
+  const [currentRole, setCurrentRole] = useState(() => {
+    if (typeof window === 'undefined') return 'customer';
+    const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '').toLowerCase();
+    const rawHash = window.location.hash.replace(/^#\/?/, '').toLowerCase();
+    const route = rawHash || rawPath;
+    if (route === 'dev' || route === 'developer' || route === 'superadmin') return 'developer';
+    if (route === 'counter' || route === 'pos' || route === 'kds' || route === 'kitchen') return 'counter';
+    if (route === 'admin' || route === 'owner') return 'admin';
+    return 'customer';
+  });
   const [activeTab, setActiveTab] = useState('menu'); // customer: 'menu','cart','track','chef'
   const [counterSubTab, setCounterSubTab] = useState('orders'); // counter: 'orders','manual','stock','checklist'
   const [adminTab, setAdminTab] = useState('sales');
@@ -96,7 +107,7 @@ export default function App() {
           if (prev.some((o) => o.id === msg.payload.id)) return prev;
           return [msg.payload, ...prev];
         });
-        if (!isSoundMuted && !msg.isInitial && (currentRole === 'counter' || currentRole === 'kds')) {
+        if (!isSoundMuted && !msg.isInitial && currentRole === 'counter') {
           playNewOrderChime();
         }
       } else if (msg.type === SYNC_EVENTS.ORDER_STATUS_UPDATED) {
@@ -127,6 +138,20 @@ export default function App() {
     return unsubscribe;
   }, [currentRole, isSoundMuted]);
 
+  // Synchronize branding with active business on initial mount
+  useEffect(() => {
+    const activeBiz = getActiveBusiness();
+    if (activeBiz) {
+      setTheme((prev) => ({
+        ...prev,
+        restaurantName: activeBiz.name,
+        tagline: activeBiz.tagline || prev.tagline,
+        upiId: activeBiz.upiId || prev.upiId,
+        accentColor: activeBiz.accentColor || prev.accentColor
+      }));
+    }
+  }, []);
+
   // URL Hash & Parameter Routing Guard
   useEffect(() => {
     const syncFromUrl = () => {
@@ -150,10 +175,13 @@ export default function App() {
         setCurrentRole('customer');
         setActiveTab('chef');
         return;
-      } else if (route === 'counter' || route === 'pos') targetRole = 'counter';
-      else if (route === 'kds' || route === 'kitchen') targetRole = 'kds';
-      else if (route === 'admin' || route === 'owner') targetRole = 'admin';
-      else if (route === 'portal' || route === 'staff') {
+      } else if (route === 'dev' || route === 'developer' || route === 'superadmin') {
+        targetRole = 'developer';
+      } else if (route === 'counter' || route === 'pos' || route === 'kds' || route === 'kitchen') {
+        targetRole = 'counter';
+      } else if (route === 'admin' || route === 'owner') {
+        targetRole = 'admin';
+      } else if (route === 'portal' || route === 'staff') {
         // Floor staff portal entry
         setAuthModal({ isOpen: true, targetRole: 'counter' });
         return;
@@ -167,12 +195,11 @@ export default function App() {
           return;
         }
 
-        if (targetRole === 'customer' || isAuthenticated(targetRole, currentRole)) {
+        if (targetRole === 'customer' || targetRole === 'developer' || isAuthenticated(targetRole, currentRole)) {
           setCurrentRole(targetRole);
           if (targetRole === 'customer') setActiveTab('menu');
           else if (targetRole === 'chef') setActiveTab('chef');
           else if (targetRole === 'counter') { setActiveTab('orders'); setCounterSubTab('orders'); }
-          else if (targetRole === 'kds') setActiveTab('kds');
           else if (targetRole === 'admin') setActiveTab('sales');
         } else {
           // Open workstation authentication gate
@@ -228,49 +255,53 @@ export default function App() {
     }
   };
 
+  // Launch / Switch to Tenant Workspace from Developer Superadmin
+  const handleSwitchToTenantApp = (biz, targetRole = 'admin') => {
+    setActiveBusiness(biz.id);
+    setTheme((prev) => ({
+      ...prev,
+      restaurantName: biz.name,
+      tagline: biz.tagline || prev.tagline,
+      upiId: biz.upiId || prev.upiId,
+      accentColor: biz.accentColor || prev.accentColor,
+      tables: biz.tables?.length || prev.tables || 12
+    }));
+    setCurrentRole(targetRole);
+    window.location.hash = targetRole;
+    if (targetRole === 'admin') setActiveTab('sales');
+    else if (targetRole === 'counter') { setActiveTab('orders'); setCounterSubTab('orders'); }
+    else if (targetRole === 'customer') setActiveTab('menu');
+  };
+
   // Switch role helper with Authentication Verification & Hierarchy Enforcement
   const handleRoleSwitch = (role) => {
     playTapSound();
     const sessions = authSessions || getStoredSessions();
-    const hasAdminAccess = canKdsReturnToAdmin(sessions);
-    const hasCounterAccess = canKdsReturnToCounter(sessions);
+    const hasAdminAccess = Boolean(sessions?.admin?.token);
 
-    // 1. When Kitchen interface is accessed by Admin or Counter person, they CAN go back to their interfaces.
-    // Access is ONLY denied for the person who directly logged into the kitchen interface.
-    if (currentRole === 'kds') {
-      if (role === 'admin') {
-        if (!hasAdminAccess) {
-          alert('Access Denied: Kitchen staff cannot access Owner Back-Office. Direct kitchen login is restricted to Kitchen station.');
-          return;
-        }
-      } else if (role === 'counter') {
-        if (!hasCounterAccess) {
-          alert('Access Denied: Kitchen staff cannot access Counter POS. Direct kitchen login is restricted to Kitchen station.');
-          return;
-        }
+    // Counter person can ONLY access counter (CANNOT access admin)
+    if (currentRole === 'counter' && role === 'admin') {
+      if (!hasAdminAccess) {
+        alert('Access Denied: Counter staff cannot access Owner Back-Office. Counter permissions are limited to Counter POS.');
+        return;
       }
     }
 
-    // 2. Counter person can ONLY access counter and kitchen (CANNOT access admin)
-    if (currentRole === 'counter' && role === 'admin') {
-      if (!hasAdminAccess) {
-        alert('Access Denied: Counter staff cannot access Owner Back-Office. Counter permissions are limited to Counter POS and Kitchen.');
+    // Developer Superadmin role check
+    if (role === 'developer') {
+      if (!isAuthenticated('developer', currentRole)) {
+        setAuthModal({ isOpen: true, targetRole: 'developer' });
         return;
       }
+      setCurrentRole('developer');
+      window.location.hash = 'developer';
+      return;
     }
 
     // Check authentication with role hierarchy
     if (role !== 'customer' && !isAuthenticated(role, currentRole)) {
       setAuthModal({ isOpen: true, targetRole: role });
       return;
-    }
-
-    // If leaving KDS as a direct kitchen login, clean up direct session
-    if (currentRole === 'kds' && role !== 'kds') {
-      if (!hasAdminAccess && !hasCounterAccess) {
-        logoutRole(ROLES.KDS);
-        setAuthSessions(getStoredSessions());
-      }
     }
 
     setCurrentRole(role);
@@ -282,15 +313,15 @@ export default function App() {
     } else if (role === 'counter') {
       setActiveTab('orders');
       setCounterSubTab('orders');
-    } else if (role === 'kds') {
-      setActiveTab('kds');
     } else if (role === 'admin') {
       setActiveTab('sales');
+    } else if (role === 'developer') {
+      // stays on developer
     }
   };
 
   // Auth Success Handler
-  const handleAuthSuccess = (newSession) => {
+  const handleAuthSuccess = (newSession, matchedBusiness) => {
     const updated = getStoredSessions();
     setAuthSessions(updated);
     setAuthModal({ isOpen: false, targetRole: null });
@@ -298,6 +329,18 @@ export default function App() {
     const role = newSession.role;
     setCurrentRole(role);
     window.location.hash = role;
+
+    if (matchedBusiness) {
+      setActiveBusiness(matchedBusiness.id);
+      setTheme((prev) => ({
+        ...prev,
+        restaurantName: matchedBusiness.name,
+        tagline: matchedBusiness.tagline || prev.tagline,
+        upiId: matchedBusiness.upiId || prev.upiId,
+        accentColor: matchedBusiness.accentColor || prev.accentColor,
+        tables: matchedBusiness.tables?.length || prev.tables || 12
+      }));
+    }
 
     if (role === 'customer') {
       if (newSession.table) setActiveTable(newSession.table);
@@ -307,10 +350,10 @@ export default function App() {
     } else if (role === 'counter') {
       setActiveTab('orders');
       setCounterSubTab('orders');
-    } else if (role === 'kds') {
-      setActiveTab('kds');
     } else if (role === 'admin') {
       setActiveTab('sales');
+    } else if (role === 'developer') {
+      // stays on developer
     }
   };
 
@@ -417,17 +460,6 @@ export default function App() {
               setChecklists={setChecklists}
               activeSubTab={counterSubTab}
               setActiveSubTab={setCounterSubTab}
-              onSwitchToKds={() => handleRoleSwitch('kds')}
-            />
-          )}
-
-          {currentRole === 'kds' && (
-            <KdsView
-              orders={orders}
-              setOrders={setOrders}
-              chef={chef}
-              authSessions={authSessions}
-              onRoleSwitch={handleRoleSwitch}
             />
           )}
 
@@ -451,6 +483,13 @@ export default function App() {
               onOpenTableQr={() => setIsTableQrOpen(true)}
             />
           )}
+
+          {currentRole === 'developer' && (
+            <DeveloperAdminView
+              onSwitchToApp={handleSwitchToTenantApp}
+              onRoleSwitch={handleRoleSwitch}
+            />
+          )}
         </div>
       </main>
 
@@ -462,8 +501,6 @@ export default function App() {
             ? activeTab
             : currentRole === 'counter'
             ? counterSubTab
-            : currentRole === 'kds'
-            ? 'kds'
             : adminTab
         }
         setActiveTab={(tabId) => {
@@ -474,14 +511,6 @@ export default function App() {
             setActiveTab(tabId);
           } else if (currentRole === 'counter') {
             setCounterSubTab(tabId);
-          } else if (currentRole === 'kds') {
-            if (tabId === 'admin') {
-              handleRoleSwitch('admin');
-            } else if (tabId === 'counter') {
-              handleRoleSwitch('counter');
-            } else if (tabId === 'kds') {
-              setActiveTab('kds');
-            }
           } else if (currentRole === 'admin') {
             setAdminTab(tabId);
           }
