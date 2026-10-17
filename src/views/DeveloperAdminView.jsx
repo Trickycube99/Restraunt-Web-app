@@ -27,6 +27,7 @@ import {
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import {
   getBusinesses,
+  getActiveBusiness,
   createBusiness,
   updateBusiness,
   deleteBusiness,
@@ -848,7 +849,7 @@ export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
             }}>
               {filteredBusinesses.map((biz) => {
                 const isActive = biz.status === 'active';
-                const currentActiveId = getActiveBusiness().id;
+                const currentActiveId = getActiveBusiness()?.id;
                 const isCurrentlyActiveWorkspace = currentActiveId === biz.id;
 
                 return (
