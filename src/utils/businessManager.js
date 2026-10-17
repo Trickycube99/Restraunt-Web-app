@@ -10,7 +10,6 @@ export const DEV_SESSION_STORAGE_KEY = 'flowscape_dev_session_v1';
 // Developer Superadmin Credentials (strictly manual login, zero autofill)
 export const DEVELOPER_CREDENTIALS = {
   email: 'dev@platform.com',
-  password: 'dev@root2026',
   name: 'Platform Lead Developer',
   role: 'developer'
 };
@@ -151,6 +150,27 @@ export function setActiveBusiness(businessId) {
 export function createBusiness(data) {
   const businesses = getBusinesses();
   const cleanEmail = (data.ownerEmail || '').trim().toLowerCase();
+  const trimmedOwnerPin = (data.ownerPin || '').toString().trim();
+  const trimmedCounterPin = (data.counterPin || '').toString().trim();
+
+  // Validate exactly 4-digit numeric PINs
+  if (!/^\d{4}$/.test(trimmedOwnerPin)) {
+    return { success: false, error: 'Owner Admin PIN must be exactly 4 digits.' };
+  }
+  if (!/^\d{4}$/.test(trimmedCounterPin)) {
+    return { success: false, error: 'Counter Staff POS PIN must be exactly 4 digits.' };
+  }
+
+  // Validate unique PIN across all businesses
+  const pinInUse = businesses.some(
+    (b) => b.owner.pin === trimmedOwnerPin ||
+           b.counter.pin === trimmedOwnerPin ||
+           b.owner.pin === trimmedCounterPin ||
+           b.counter.pin === trimmedCounterPin
+  );
+  if (pinInUse) {
+    return { success: false, error: 'Specified Owner PIN or Counter PIN is already in use by another business. Please choose unique 4-digit PINs.' };
+  }
 
   // Validate duplicate email
   const existing = businesses.find((b) => b.owner.email.toLowerCase() === cleanEmail);
@@ -170,10 +190,10 @@ export function createBusiness(data) {
     owner: {
       name: (data.ownerName || '').trim() || 'Business Owner',
       email: cleanEmail,
-      pin: (data.ownerPin || '').toString().trim() || '9999'
+      pin: trimmedOwnerPin
     },
     counter: {
-      pin: (data.counterPin || '').toString().trim() || '4444',
+      pin: trimmedCounterPin,
       terminalName: `${(data.name || 'POS').split(' ')[0]} Terminal 01`
     },
     upiId: (data.upiId || '').trim() || 'payment@upi',
@@ -237,10 +257,11 @@ export function deleteBusiness(id) {
 export function authenticateDeveloper(email, password) {
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanPass = (password || '').trim();
+  const masterKey = import.meta.env?.VITE_DEV_PASSWORD || 'dev@root2026';
 
   if (
     cleanEmail === DEVELOPER_CREDENTIALS.email.toLowerCase() &&
-    cleanPass === DEVELOPER_CREDENTIALS.password
+    cleanPass === masterKey
   ) {
     const session = {
       role: 'developer',
@@ -251,9 +272,7 @@ export function authenticateDeveloper(email, password) {
     };
     try {
       localStorage.setItem(DEV_SESSION_STORAGE_KEY, JSON.stringify(session));
-    } catch (e) {
-      console.error(e);
-    }
+    } catch {}
     return { success: true, session };
   }
 
@@ -331,12 +350,20 @@ export function authenticateCounterByPin(pin, cashierName, activeBusinessId = nu
   const cleanPin = (pin || '').toString().trim();
   const name = (cashierName || '').trim() || 'Counter Staff';
 
-  // Check if matches active business counter PIN or owner master PIN
+  // Check strictly against active business or explicitly selected business
   const targetBiz = activeBusinessId
     ? businesses.find((b) => b.id === activeBusinessId)
     : getActiveBusiness();
 
-  if (targetBiz && (targetBiz.counter.pin === cleanPin || targetBiz.owner.pin === cleanPin)) {
+  if (!targetBiz) {
+    return { success: false, error: 'Target business account not found.' };
+  }
+
+  if (targetBiz.status !== 'active') {
+    return { success: false, error: `Business account "${targetBiz.name}" is currently ${targetBiz.status}. Contact Administrator.` };
+  }
+
+  if (targetBiz.counter.pin === cleanPin || targetBiz.owner.pin === cleanPin) {
     const isAdminOverride = targetBiz.owner.pin === cleanPin;
     return {
       success: true,
@@ -348,27 +375,6 @@ export function authenticateCounterByPin(pin, cashierName, activeBusinessId = nu
         name: isAdminOverride ? `${targetBiz.owner.name} (Admin Override)` : name,
         terminal: targetBiz.counter.terminalName,
         token: `pos_${targetBiz.id}_${Date.now()}`,
-        authenticatedAt: new Date().toISOString(),
-        authenticatedBy: isAdminOverride ? 'admin' : 'counter'
-      }
-    };
-  }
-
-  // Check any business if not matched on active
-  const anyBiz = businesses.find((b) => b.counter.pin === cleanPin || b.owner.pin === cleanPin);
-  if (anyBiz) {
-    setActiveBusiness(anyBiz.id);
-    const isAdminOverride = anyBiz.owner.pin === cleanPin;
-    return {
-      success: true,
-      business: anyBiz,
-      session: {
-        role: 'counter',
-        businessId: anyBiz.id,
-        businessName: anyBiz.name,
-        name: isAdminOverride ? `${anyBiz.owner.name} (Admin Override)` : name,
-        terminal: anyBiz.counter.terminalName,
-        token: `pos_${anyBiz.id}_${Date.now()}`,
         authenticatedAt: new Date().toISOString(),
         authenticatedBy: isAdminOverride ? 'admin' : 'counter'
       }

@@ -26,39 +26,52 @@ import {
 } from './utils/auth';
 import {
   getActiveBusiness,
-  setActiveBusiness
+  setActiveBusiness,
+  getBusinesses
 } from './utils/businessManager';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
 import confetti from 'canvas-confetti';
 
+const getScopedKey = (baseKey, bizId) => {
+  if (!bizId || bizId === 'biz_advait') return baseKey;
+  return `${baseKey}_${bizId}`;
+};
+
 export default function App() {
-  // Global Shared States (Persisted in localStorage)
-  const [menu, setMenu] = useState(() => loadData(STORAGE_KEYS.MENU, initialMenu));
+  const initialBiz = getActiveBusiness();
+  const initialBizId = initialBiz?.id || 'biz_advait';
+  const isDefaultBiz = initialBizId === 'biz_advait';
+
+  const [activeBusinessId, setActiveBusinessId] = useState(initialBizId);
+
+  // Global Shared States (Persisted in localStorage scoped by active business)
+  const [menu, setMenu] = useState(() => loadData(getScopedKey(STORAGE_KEYS.MENU, initialBizId), initialMenu));
   const [chef, setChef] = useState(() => loadData(STORAGE_KEYS.CHEF, verifiedChefData));
   const [orders, setOrders] = useState(() => {
-    const loaded = loadData(STORAGE_KEYS.ORDERS, initialOrders);
+    const loaded = loadData(getScopedKey(STORAGE_KEYS.ORDERS, initialBizId), isDefaultBiz ? initialOrders : []);
     return loaded.map((o) =>
       o.id === 'ORD-8821' && o.status === 'in-progress'
         ? { ...o, status: 'received', statusLabel: 'Received', progressPercent: 25 }
         : o
     );
   });
-  const [expenses, setExpenses] = useState(() => loadData(STORAGE_KEYS.EXPENSES, initialExpenses));
-  const [staff, setStaff] = useState(() => loadData(STORAGE_KEYS.STAFF, initialStaff));
-  const [offers, setOffers] = useState(() => loadData(STORAGE_KEYS.OFFERS, initialOffers));
+  const [expenses, setExpenses] = useState(() => loadData(getScopedKey(STORAGE_KEYS.EXPENSES, initialBizId), isDefaultBiz ? initialExpenses : []));
+  const [staff, setStaff] = useState(() => loadData(getScopedKey(STORAGE_KEYS.STAFF, initialBizId), isDefaultBiz ? initialStaff : []));
+  const [offers, setOffers] = useState(() => loadData(getScopedKey(STORAGE_KEYS.OFFERS, initialBizId), isDefaultBiz ? initialOffers : []));
   const [theme, setTheme] = useState(() => {
-    const loaded = loadData(STORAGE_KEYS.THEME, initialTheme);
+    const loaded = loadData(getScopedKey(STORAGE_KEYS.THEME, initialBizId), initialTheme);
     const activeBiz = getActiveBusiness();
     const bizOverride = activeBiz ? {
       restaurantName: activeBiz.name,
       tagline: activeBiz.tagline || loaded?.tagline,
       upiId: activeBiz.upiId || loaded?.upiId,
-      accentColor: activeBiz.accentColor || loaded?.accentColor
+      accentColor: activeBiz.accentColor || loaded?.accentColor,
+      tables: Array.isArray(activeBiz.tables) && activeBiz.tables.length > 0 ? activeBiz.tables : (loaded?.tables || initialTheme.tables)
     } : {};
     return { ...initialTheme, ...loaded, ...bizOverride, upiId: loaded?.upiId || bizOverride.upiId || initialTheme.upiId || '9119069179@nyes' };
   });
-  const [checklists, setChecklists] = useState(() => loadData(STORAGE_KEYS.CHECKLISTS, []));
+  const [checklists, setChecklists] = useState(() => loadData(getScopedKey(STORAGE_KEYS.CHECKLISTS, initialBizId), []));
 
   // Authentication State
   const [authSessions, setAuthSessions] = useState(() => getStoredSessions());
@@ -92,14 +105,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  // Save changes to localStorage
-  useEffect(() => { saveData(STORAGE_KEYS.MENU, menu); }, [menu]);
-  useEffect(() => { saveData(STORAGE_KEYS.ORDERS, orders); }, [orders]);
-  useEffect(() => { saveData(STORAGE_KEYS.EXPENSES, expenses); }, [expenses]);
-  useEffect(() => { saveData(STORAGE_KEYS.STAFF, staff); }, [staff]);
-  useEffect(() => { saveData(STORAGE_KEYS.OFFERS, offers); }, [offers]);
-  useEffect(() => { saveData(STORAGE_KEYS.THEME, theme); }, [theme]);
-  useEffect(() => { saveData(STORAGE_KEYS.CHECKLISTS, checklists); }, [checklists]);
+  // Save changes to localStorage scoped by active business
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.MENU, activeBusinessId), menu); }, [menu, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.ORDERS, activeBusinessId), orders); }, [orders, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.EXPENSES, activeBusinessId), expenses); }, [expenses, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.STAFF, activeBusinessId), staff); }, [staff, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.OFFERS, activeBusinessId), offers); }, [offers, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.THEME, activeBusinessId), theme); }, [theme, activeBusinessId]);
+  useEffect(() => { saveData(getScopedKey(STORAGE_KEYS.CHECKLISTS, activeBusinessId), checklists); }, [checklists, activeBusinessId]);
 
   // Real-Time Cross-Tab / Cross-Device Synchronization Listener
   useEffect(() => {
@@ -246,17 +259,41 @@ export default function App() {
     }
   };
 
+  // Helper to load scoped tenant business data
+  const loadBusinessData = (bizId, bizObj = null) => {
+    const isDefault = !bizId || bizId === 'biz_advait';
+    const biz = bizObj || getBusinesses().find((b) => b.id === bizId);
+
+    const loadedMenu = loadData(getScopedKey(STORAGE_KEYS.MENU, bizId), initialMenu);
+    const loadedOrders = loadData(getScopedKey(STORAGE_KEYS.ORDERS, bizId), isDefault ? initialOrders : []);
+    const loadedExpenses = loadData(getScopedKey(STORAGE_KEYS.EXPENSES, bizId), isDefault ? initialExpenses : []);
+    const loadedStaff = loadData(getScopedKey(STORAGE_KEYS.STAFF, bizId), isDefault ? initialStaff : []);
+    const loadedOffers = loadData(getScopedKey(STORAGE_KEYS.OFFERS, bizId), isDefault ? initialOffers : []);
+    const loadedChecklists = loadData(getScopedKey(STORAGE_KEYS.CHECKLISTS, bizId), []);
+
+    const loadedTheme = loadData(getScopedKey(STORAGE_KEYS.THEME, bizId), initialTheme);
+    const bizOverride = biz ? {
+      restaurantName: biz.name,
+      tagline: biz.tagline || loadedTheme?.tagline,
+      upiId: biz.upiId || loadedTheme?.upiId,
+      accentColor: biz.accentColor || loadedTheme?.accentColor,
+      tables: Array.isArray(biz.tables) && biz.tables.length > 0 ? biz.tables : (loadedTheme?.tables || initialTheme.tables)
+    } : {};
+
+    setMenu(loadedMenu);
+    setOrders(loadedOrders);
+    setExpenses(loadedExpenses);
+    setStaff(loadedStaff);
+    setOffers(loadedOffers);
+    setChecklists(loadedChecklists);
+    setTheme({ ...initialTheme, ...loadedTheme, ...bizOverride });
+  };
+
   // Launch / Switch to Tenant Workspace from Developer Superadmin
   const handleSwitchToTenantApp = (biz, targetRole = 'admin') => {
     setActiveBusiness(biz.id);
-    setTheme((prev) => ({
-      ...prev,
-      restaurantName: biz.name,
-      tagline: biz.tagline || prev.tagline,
-      upiId: biz.upiId || prev.upiId,
-      accentColor: biz.accentColor || prev.accentColor,
-      tables: biz.tables?.length || prev.tables || 12
-    }));
+    setActiveBusinessId(biz.id);
+    loadBusinessData(biz.id, biz);
     setCurrentRole(targetRole);
     window.location.hash = targetRole;
     if (targetRole === 'admin') setActiveTab('sales');
@@ -323,14 +360,8 @@ export default function App() {
 
     if (matchedBusiness) {
       setActiveBusiness(matchedBusiness.id);
-      setTheme((prev) => ({
-        ...prev,
-        restaurantName: matchedBusiness.name,
-        tagline: matchedBusiness.tagline || prev.tagline,
-        upiId: matchedBusiness.upiId || prev.upiId,
-        accentColor: matchedBusiness.accentColor || prev.accentColor,
-        tables: matchedBusiness.tables?.length || prev.tables || 12
-      }));
+      setActiveBusinessId(matchedBusiness.id);
+      loadBusinessData(matchedBusiness.id, matchedBusiness);
     }
 
     if (role === 'customer') {

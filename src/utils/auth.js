@@ -175,8 +175,7 @@ export const ROLE_CONFIGS = {
     securityLevel: 'Master Developer Root Authentication',
     description: 'Manage all tenant businesses, provision new business accounts, monitor real-time platform telemetry and database partitions.',
     demoCredentials: {
-      email: DEVELOPER_CREDENTIALS.email,
-      password: DEVELOPER_CREDENTIALS.password
+      email: DEVELOPER_CREDENTIALS.email
     },
     validate: (creds) => {
       const email = (creds?.email || '').trim().toLowerCase();
@@ -272,8 +271,8 @@ export function isAuthenticated(role, activeSessionRole = null) {
     return isDeveloperAuthenticated();
   }
 
-  // Developer Superadmin has master clearance to inspect any role
-  if (isDeveloperAuthenticated() || activeSessionRole === ROLES.DEVELOPER) {
+  // Developer Superadmin has master clearance to inspect any role only when verified
+  if (isDeveloperAuthenticated()) {
     return true;
   }
 

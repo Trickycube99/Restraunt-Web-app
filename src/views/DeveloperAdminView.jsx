@@ -124,12 +124,26 @@ export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
       setFormError('A valid owner email address is required.');
       return;
     }
-    if (!newBiz.ownerPin.trim() || newBiz.ownerPin.length < 4) {
-      setFormError('Owner Admin PIN must be at least 4 digits.');
+    const trimmedOwnerPin = newBiz.ownerPin.trim();
+    const trimmedCounterPin = newBiz.counterPin.trim();
+
+    if (!/^\d{4}$/.test(trimmedOwnerPin)) {
+      setFormError('Owner Admin PIN must be exactly 4 digits (e.g. 8821).');
       return;
     }
-    if (!newBiz.counterPin.trim() || newBiz.counterPin.length < 4) {
-      setFormError('Counter Staff POS PIN must be at least 4 digits.');
+    if (!/^\d{4}$/.test(trimmedCounterPin)) {
+      setFormError('Counter Staff POS PIN must be exactly 4 digits (e.g. 4421).');
+      return;
+    }
+
+    const pinInUse = businesses.some(
+      (b) => b.owner.pin === trimmedOwnerPin ||
+             b.counter.pin === trimmedOwnerPin ||
+             b.owner.pin === trimmedCounterPin ||
+             b.counter.pin === trimmedCounterPin
+    );
+    if (pinInUse) {
+      setFormError('Specified Owner PIN or Counter PIN is already assigned to another business. Please choose unique 4-digit PINs.');
       return;
     }
 
@@ -138,6 +152,8 @@ export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
 
     const res = createBusiness({
       ...newBiz,
+      ownerPin: trimmedOwnerPin,
+      counterPin: trimmedCounterPin,
       tables
     });
 
