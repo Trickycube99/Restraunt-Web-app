@@ -1,16 +1,4 @@
 import React, { useState } from 'react';
-import {
-  TrendingDown,
-  AlertTriangle,
-  CheckCircle2,
-  Calendar,
-  FileText,
-  Download,
-  ExternalLink,
-  HelpCircle,
-  Clock,
-  ArrowRight
-} from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
 export default function AggregatorReconciliationView() {
@@ -18,7 +6,7 @@ export default function AggregatorReconciliationView() {
   const [activeTab, setActiveTab] = useState('pending'); // 'pending' | 'settled'
 
   // Mock Aggregator Weekly Batches
-  const [batches, setBatches] = useState([
+  const [batches] = useState([
     {
       id: 'ZOM-BATCH-OCT-W2',
       platform: 'Zomato',
@@ -273,8 +261,9 @@ export default function AggregatorReconciliationView() {
                   className="btn-secondary-pill"
                   style={{ padding: '2px 8px', fontSize: 10, color: '#DC2626' }}
                   onClick={() => handleRaiseDispute(batch.id)}
+                  disabled={disputeLogged}
                 >
-                  Dispute Deduction
+                  {disputeLogged ? 'Logging Ticket...' : 'Dispute Deduction'}
                 </button>
               </div>
             )}

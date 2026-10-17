@@ -2,8 +2,6 @@
 // Enables Developer Admin to manage the entire platform, create/manage multiple business accounts,
 // and authenticate distinct business owners with their own credentials.
 
-import { loadData, saveData } from './storage';
-import { initialMenu, initialTheme, initialOffers, initialStaff, verifiedChefData } from '../data/initialData';
 
 export const BUSINESSES_STORAGE_KEY = 'flowscape_businesses_v1';
 export const ACTIVE_BUSINESS_ID_KEY = 'flowscape_active_business_id_v1';

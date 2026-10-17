@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Printer, X, Check, FileText, QrCode } from 'lucide-react';
+import { Printer, X, QrCode } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
 
 export default function PrinterModal({ order, theme, chef, onClose }) {

@@ -3,16 +3,11 @@ import {
   FileSpreadsheet,
   Upload,
   CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
-  RefreshCw,
-  Download,
-  Filter,
   Check
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
-export default function BankReconciliationView({ orders, theme }) {
+export default function BankReconciliationView({ orders: _orders, theme: _theme }) {
   // Mock Bank Statement Entries (from HDFC / ICICI Current Account)
   const [bankEntries, setBankEntries] = useState([
     { id: 'TXN-101', date: '2026-10-15', description: 'UPI SETTLEMENT - BHARATPE / PAYTM', credit: 11250, matchedId: 'POS-UPI-15OCT', status: 'matched' },

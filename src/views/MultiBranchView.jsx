@@ -2,19 +2,13 @@ import React, { useState } from 'react';
 import {
   Building2,
   MapPin,
-  TrendingUp,
-  Users,
-  Utensils,
   RefreshCw,
   CheckCircle2,
-  ChevronRight,
-  ShieldCheck,
-  Clock,
-  ArrowUpRight
+  ShieldCheck
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
-export default function MultiBranchView({ theme, chef }) {
+export default function MultiBranchView({ theme: _theme, chef: _chef }) {
   const [selectedBranchId, setSelectedBranchId] = useState('all'); // 'all' | 'delhi' | 'gurugram' | 'bengaluru'
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncDone, setSyncDone] = useState(false);

@@ -41,7 +41,7 @@ export const getFirebaseConfig = () => {
         return parsed;
       }
     }
-  } catch (e) {
+  } catch {
     // ignore
   }
 
@@ -97,7 +97,7 @@ function updateSyncState(patch) {
   stateListeners.forEach((cb) => {
     try {
       cb(current);
-    } catch (e) {
+    } catch {
       // ignore
     }
   });
@@ -215,7 +215,7 @@ export async function syncServerCallToCloud(callData) {
       _cloudAlertAt: Date.now()
     });
     return true;
-  } catch (err) {
+  } catch {
     return false;
   }
 }
@@ -238,7 +238,7 @@ export function subscribeToCloudServerCalls(onCallReceived) {
       isInitial = false;
     });
     return unsubscribe;
-  } catch (err) {
+  } catch {
     return () => {};
   }
 }
@@ -340,7 +340,7 @@ export function subscribeToCloudOffers(onOffersUpdated) {
       isInitial = false;
     });
     return unsubscribe;
-  } catch (err) {
+  } catch {
     return () => {};
   }
 }
@@ -389,7 +389,7 @@ export function subscribeToCloudMenu(onMenuUpdated) {
       console.warn('🔥 [Cloud Sync] Error listening to menu changes:', err);
     });
     return unsubscribe;
-  } catch (err) {
+  } catch {
     return () => {};
   }
 }

@@ -7,7 +7,6 @@ import {
   authenticateDeveloper,
   isDeveloperAuthenticated,
   getActiveBusiness,
-  getBusinesses,
   DEVELOPER_CREDENTIALS
 } from './businessManager';
 

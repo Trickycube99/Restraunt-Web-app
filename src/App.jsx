@@ -19,17 +19,14 @@ import {
 } from './data/initialData';
 import { loadData, saveData, resetAllDataToDefault, STORAGE_KEYS } from './utils/storage';
 import {
-  ROLES,
   getStoredSessions,
   isAuthenticated,
-  getSession,
   logoutRole,
   resetAllSessions
 } from './utils/auth';
 import {
   getActiveBusiness,
-  setActiveBusiness,
-  isDeveloperAuthenticated
+  setActiveBusiness
 } from './utils/businessManager';
 import { playNewOrderChime, playTapSound } from './utils/audio';
 import { subscribeSyncEvents, SYNC_EVENTS } from './utils/sync';
@@ -52,7 +49,14 @@ export default function App() {
   const [offers, setOffers] = useState(() => loadData(STORAGE_KEYS.OFFERS, initialOffers));
   const [theme, setTheme] = useState(() => {
     const loaded = loadData(STORAGE_KEYS.THEME, initialTheme);
-    return { ...initialTheme, ...loaded, upiId: loaded?.upiId || initialTheme.upiId || '9119069179@nyes' };
+    const activeBiz = getActiveBusiness();
+    const bizOverride = activeBiz ? {
+      restaurantName: activeBiz.name,
+      tagline: activeBiz.tagline || loaded?.tagline,
+      upiId: activeBiz.upiId || loaded?.upiId,
+      accentColor: activeBiz.accentColor || loaded?.accentColor
+    } : {};
+    return { ...initialTheme, ...loaded, ...bizOverride, upiId: loaded?.upiId || bizOverride.upiId || initialTheme.upiId || '9119069179@nyes' };
   });
   const [checklists, setChecklists] = useState(() => loadData(STORAGE_KEYS.CHECKLISTS, []));
 
@@ -138,19 +142,6 @@ export default function App() {
     return unsubscribe;
   }, [currentRole, isSoundMuted]);
 
-  // Synchronize branding with active business on initial mount
-  useEffect(() => {
-    const activeBiz = getActiveBusiness();
-    if (activeBiz) {
-      setTheme((prev) => ({
-        ...prev,
-        restaurantName: activeBiz.name,
-        tagline: activeBiz.tagline || prev.tagline,
-        upiId: activeBiz.upiId || prev.upiId,
-        accentColor: activeBiz.accentColor || prev.accentColor
-      }));
-    }
-  }, []);
 
   // URL Hash & Parameter Routing Guard
   useEffect(() => {

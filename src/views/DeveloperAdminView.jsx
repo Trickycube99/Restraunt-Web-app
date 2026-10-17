@@ -1,30 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  ShieldAlert,
   Server,
   Building2,
-  Users,
-  Layers,
   KeyRound,
   PlusCircle,
   Search,
   ExternalLink,
   CheckCircle2,
   AlertTriangle,
-  RotateCcw,
   Download,
   Trash2,
-  Edit3,
   Lock,
   LogOut,
-  Sparkles,
   Activity,
   ArrowRight,
-  Database,
-  Globe,
   Radio,
   Sliders,
-  DollarSign,
   TrendingUp,
   Receipt,
   Eye,
@@ -36,16 +27,13 @@ import {
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import {
   getBusinesses,
-  saveBusinesses,
   createBusiness,
   updateBusiness,
   deleteBusiness,
-  getActiveBusiness,
   setActiveBusiness,
   authenticateDeveloper,
   isDeveloperAuthenticated,
-  logoutDeveloper,
-  DEVELOPER_CREDENTIALS
+  logoutDeveloper
 } from '../utils/businessManager';
 
 export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
@@ -64,7 +52,6 @@ export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(null); // business object
-  const [showEditModal, setShowEditModal] = useState(null); // business object
   const [copiedKey, setCopiedKey] = useState(null);
 
   // New Business Form State
@@ -219,7 +206,7 @@ export default function DeveloperAdminView({ onSwitchToApp, onRoleSwitch }) {
     } else if (onRoleSwitch) {
       onRoleSwitch(targetRole);
     } else {
-      window.location.hash = targetRole;
+      window.location.assign(`#${targetRole}`);
     }
   };
 

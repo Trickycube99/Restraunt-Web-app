@@ -9,9 +9,7 @@ import {
   X,
   CheckCircle2,
   Sparkles,
-  ShieldCheck,
-  Utensils,
-  MapPin
+  Utensils
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
@@ -27,12 +25,7 @@ export default function TableQrModal({
   restaurantName = 'Advait Artisanal Indian Kitchen'
 }) {
   const [selectedTable, setSelectedTable] = useState(activeTable || 'Table 04');
-  const [baseUrl, setBaseUrl] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.location.origin;
-    }
-    return 'http://localhost:5173';
-  });
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [isCopied, setIsCopied] = useState(false);
 

@@ -4,13 +4,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   Copy,
-  ExternalLink,
   X,
   RefreshCw,
-  Sparkles,
   Server,
-  Smartphone,
-  ShieldCheck,
   Check
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';

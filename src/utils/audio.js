@@ -68,7 +68,7 @@ export function playTapSound() {
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.05);
-  } catch (e) {
+  } catch {
     // Ignore audio errors
   }
 }
@@ -94,7 +94,7 @@ export function playSuccessChime() {
       osc.start(now + idx * 0.1);
       osc.stop(now + idx * 0.1 + 0.4);
     });
-  } catch (e) {
+  } catch {
     // Ignore audio errors
   }
 }
@@ -117,7 +117,7 @@ export function playAlertChime() {
     gain.connect(ctx.destination);
     osc.start(now);
     osc.stop(now + 0.35);
-  } catch (e) {
+  } catch {
     // Ignore
   }
 }

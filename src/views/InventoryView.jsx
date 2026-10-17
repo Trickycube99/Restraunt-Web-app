@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
 import {
   Boxes,
-  AlertTriangle,
-  Plus,
-  RefreshCw,
-  Scale,
-  TrendingDown,
-  CheckCircle2,
-  Trash2
+  TrendingDown
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
-export default function InventoryView({ menu }) {
+export default function InventoryView({ menu: _menu }) {
   const [ingredients, setIngredients] = useState([
     { id: 'ing-1', name: 'A2 Gir Cow Clarified Ghee', category: 'Dairy & Fats', inStock: 18.5, unit: 'kg', reorderLevel: 5.0, costPerUnit: 1100 },
     { id: 'ing-2', name: 'Fresh Prime Farm Chicken', category: 'Poultry', inStock: 6.2, unit: 'kg', reorderLevel: 8.0, costPerUnit: 240, isLow: true },

@@ -9,7 +9,7 @@
 export function exportToTallyPrimeXml(orders, theme) {
   const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   
-  const voucherEntries = orders.map((order, idx) => {
+  const voucherEntries = orders.map((order) => {
     const voucherNo = `POS-${order.id.replace('ORD-', '')}`;
     const voucherDate = currentDate;
     const narration = `QR Dine Order ${order.id} at ${order.table} - ${theme.restaurantName}`;
@@ -97,7 +97,7 @@ export function exportToTallyPrimeXml(orders, theme) {
 /**
  * Generates and triggers download of Zoho Books CSV Invoice Import format
  */
-export function exportToZohoBooksCsv(orders, theme) {
+export function exportToZohoBooksCsv(orders, _theme) {
   const headers = [
     'Invoice Number',
     'Customer Name',

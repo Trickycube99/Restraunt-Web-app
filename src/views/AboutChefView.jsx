@@ -5,12 +5,9 @@ import {
   CheckCircle2,
   FileCheck2,
   Sparkles,
-  ExternalLink,
   ChevronRight,
   Heart,
-  QrCode,
   UtensilsCrossed,
-  Info,
   ArrowLeft
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';

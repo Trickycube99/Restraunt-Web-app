@@ -67,7 +67,7 @@ export function broadcastSyncEvent(type, payload = {}) {
   // 2. LocalStorage event bus fallback for cross-window reliability on same device
   try {
     localStorage.setItem('flowscape_sync_event_ping', JSON.stringify(eventMessage));
-  } catch (err) {
+  } catch {
     // Ignore storage quota warnings
   }
 

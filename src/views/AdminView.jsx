@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import {
-  BarChart3,
   Receipt,
-  DollarSign,
   Users,
   Palette,
   TrendingUp,
@@ -12,27 +10,14 @@ import {
   Trash2,
   Edit2,
   CheckCircle2,
-  ShieldAlert,
-  Calendar,
-  Clock,
-  FileSpreadsheet,
   Award,
-  Layers,
-  Sparkles,
-  Building2,
-  Boxes,
-  Crown,
   FileCode,
   Send,
   QrCode,
   Tag,
-  Percent,
   Copy,
   Check,
-  AlertTriangle,
-  CalendarX,
-  Camera,
-  Upload
+  Camera
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import BankReconciliationView from './BankReconciliationView';
@@ -45,6 +30,13 @@ import { broadcastSyncEvent, SYNC_EVENTS } from '../utils/sync';
 import { STORAGE_KEYS, saveData } from '../utils/storage';
 import { DEFAULT_CUTLERY_IMAGE } from '../data/initialData';
 
+// Coupons & Offers Helpers (placed outside component for purity)
+const isOfferExpired = (offer) => {
+  if (!offer || !offer.expiryDate) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return offer.expiryDate < today;
+};
+
 export default function AdminView({
   orders,
   menu,
@@ -56,7 +48,7 @@ export default function AdminView({
   theme,
   setTheme,
   chef,
-  checklists,
+  checklists: _checklists,
   offers = [],
   setOffers,
   activeAdminTab: externalActiveAdminTab,
@@ -67,7 +59,6 @@ export default function AdminView({
   const activeAdminTab = externalActiveAdminTab !== undefined ? externalActiveAdminTab : internalActiveAdminTab;
   const setActiveAdminTab = externalSetActiveAdminTab || setInternalActiveAdminTab;
   const [orderSearch, setOrderSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [payrollDisbursed, setPayrollDisbursed] = useState(false);
 
   // Coupons & Offers Management State
@@ -105,12 +96,6 @@ export default function AdminView({
   const [newDishTags, setNewDishTags] = useState("Chef's Special");
   const [newDishImage, setNewDishImage] = useState(null);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
-
-  // User Management State
-  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
-  const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState('Counter Assistant');
-  const [newStaffWage, setNewStaffWage] = useState('22000');
 
   // Sales KPIs calculation in ₹
   const totalOrdersCount = orders.length;
@@ -374,13 +359,6 @@ export default function AdminView({
     link.click();
     document.body.removeChild(link);
     playSuccessChime();
-  };
-
-  // Coupons & Offers Helpers
-  const isOfferExpired = (offer) => {
-    if (!offer || !offer.expiryDate) return false;
-    const today = new Date().toISOString().slice(0, 10);
-    return offer.expiryDate < today;
   };
 
   const handleOpenCreateCoupon = () => {
@@ -1977,6 +1955,17 @@ export default function AdminView({
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Dish Tags (Comma-separated)</label>
+                <input
+                  type="text"
+                  className="ios-input"
+                  placeholder="Chef's Special, Best Seller"
+                  value={newDishTags}
+                  onChange={(e) => setNewDishTags(e.target.value)}
+                />
               </div>
 
               <div style={{ marginBottom: 14 }}>

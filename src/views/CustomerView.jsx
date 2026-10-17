@@ -9,7 +9,6 @@ import {
   ShieldCheck,
   CheckCircle2,
   ChevronRight,
-  Filter,
   X,
   CreditCard,
   QrCode,
@@ -17,9 +16,7 @@ import {
   MessageSquare,
   Bell,
   Check,
-  Phone,
   AlertTriangle,
-  Lock,
   User,
   Edit2,
   Utensils,
@@ -37,7 +34,7 @@ export default function CustomerView({
   chef,
   theme,
   activeTable,
-  setActiveTable,
+  _setActiveTable,
   orders,
   cart,
   setCart,
@@ -127,30 +124,20 @@ export default function CustomerView({
   // Calculate cart subtotal
   const cartSubtotal = cart.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const tax = Number((cartSubtotal * 0.05).toFixed(2)); // 5% GST (2.5% CGST + 2.5% SGST)
-  const discountAmount = appliedPromo
-    ? appliedPromo.type === 'percent'
+  const isPromoEligible = Boolean(appliedPromo && (!appliedPromo.minOrderAmount || cartSubtotal >= Number(appliedPromo.minOrderAmount)));
+  const activePromo = isPromoEligible ? appliedPromo : null;
+  const discountAmount = activePromo
+    ? activePromo.type === 'percent'
       ? Number(
           Math.min(
-            appliedPromo.maxDiscount || Infinity,
-            (cartSubtotal * Number(appliedPromo.value)) / 100
+            activePromo.maxDiscount || Infinity,
+            (cartSubtotal * Number(activePromo.value)) / 100
           ).toFixed(2)
         )
-      : Number(Math.min(Number(appliedPromo.value), cartSubtotal).toFixed(2))
+      : Number(Math.min(Number(activePromo.value), cartSubtotal).toFixed(2))
     : 0;
   const cartTotal = Math.max(0, Number((cartSubtotal + tax - discountAmount).toFixed(2)));
   const totalItemCount = cart.reduce((acc, i) => acc + i.quantity, 0);
-
-  // Automatically remove promo if cart drops below required minimum order amount
-  useEffect(() => {
-    if (appliedPromo && appliedPromo.minOrderAmount && cartSubtotal > 0 && cartSubtotal < Number(appliedPromo.minOrderAmount)) {
-      setAppliedPromo(null);
-      setPromoMessage(
-        language === 'hi'
-          ? `कूपन ${appliedPromo.code} हटाया गया: ऑर्डर ₹${appliedPromo.minOrderAmount} से कम है`
-          : `Coupon ${appliedPromo.code} removed: Cart is below minimum ₹${appliedPromo.minOrderAmount}.`
-      );
-    }
-  }, [cartSubtotal, appliedPromo, language]);
 
   // Suggestable item for upsell (FR-C8)
   const suggestableItem = menu.find((item) => item.id === 3) || menu[0];
@@ -171,7 +158,7 @@ export default function CustomerView({
       }
     }
     prevStatusRef.current = activeCustomerOrder?.status;
-  }, [activeCustomerOrder?.status]);
+  }, [activeCustomerOrder]);
 
   const handleDecreaseItemQty = (itemId) => {
     playTapSound();

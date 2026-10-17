@@ -2,34 +2,52 @@ import React, { useState, useEffect } from 'react';
 import {
   Layers,
   CheckCircle2,
-  Clock,
-  XCircle,
   Plus,
   SlidersHorizontal,
   DollarSign,
   AlertTriangle,
-  FileText,
-  Volume2,
-  RefreshCw,
-  Search,
   Check,
   Percent,
   Tag,
   Printer,
   MessageSquare,
-  Monitor,
-  Flame,
-  Send,
   Sparkles,
   Bell,
-  Utensils,
   Trash2
 } from 'lucide-react';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
 import PrinterModal from '../components/PrinterModal';
 import WhatsAppAlertModal from '../components/WhatsAppAlertModal';
 import { broadcastSyncEvent, SYNC_EVENTS, subscribeSyncEvents } from '../utils/sync';
-import { STORAGE_KEYS, saveData } from '../utils/storage';
+
+function checkUnacceptedOverdue(order) {
+  if (!order || !order.createdAt) return { elapsedMins: 0, isUnacceptedOverdue: false };
+  const createdTime = new Date(order.createdAt).getTime();
+  const elapsedMs = Math.max(0, Date.now() - createdTime);
+  const isUnacceptedOverdue = order.status === 'received' && elapsedMs > 2 * 60 * 1000;
+  const elapsedMins = Math.floor(elapsedMs / 60000);
+  return { elapsedMins, isUnacceptedOverdue };
+}
+
+function isOfferExpired(offer) {
+  if (!offer || !offer.expiryDate) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return offer.expiryDate < today;
+}
+
+function createClosingChecklistReport({ expected, actual, variance, varianceReason }) {
+  const now = new Date();
+  return {
+    id: `CHK-${now.getTime()}`,
+    date: now.toLocaleDateString(),
+    timestamp: now.toLocaleTimeString(),
+    expected,
+    actual,
+    variance,
+    varianceReason: varianceReason || 'Balanced settlement within threshold',
+    status: 'Audited & Submitted'
+  };
+}
 
 export default function CounterView({
   orders,
@@ -39,9 +57,9 @@ export default function CounterView({
   offers,
   setOffers,
   theme,
-  setTheme,
+  setTheme: _setTheme,
   chef,
-  checklists,
+  checklists: _checklists,
   setChecklists,
   activeSubTab = 'orders',
   setActiveSubTab
@@ -140,7 +158,7 @@ export default function CounterView({
       const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
       const updatedList = currentOrders.map((ord) => (ord.id === orderId ? updatedOrder : ord));
       localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
-    } catch (e) {
+    } catch {
       // ignore
     }
 
@@ -172,7 +190,7 @@ export default function CounterView({
       const currentOrders = JSON.parse(localStorage.getItem('flowscape_orders_v2') || '[]');
       const updatedList = currentOrders.map((ord) => (ord.id === rejectOrderId ? rejectedOrder : ord));
       localStorage.setItem('flowscape_orders_v2', JSON.stringify(updatedList));
-    } catch (e) {
+    } catch {
       // ignore
     }
 
@@ -298,10 +316,7 @@ export default function CounterView({
       return;
     }
 
-    const report = {
-      id: `CHK-${Date.now()}`,
-      date: new Date().toLocaleDateString(),
-      timestamp: new Date().toLocaleTimeString(),
+    const report = createClosingChecklistReport({
       expected: { cash: expectedCash, card: expectedCard, upi: expectedUpi, total: totalExpected },
       actual: {
         cash: Number(actualCash || 0),
@@ -310,9 +325,8 @@ export default function CounterView({
         total: Number(actualCash || 0) + Number(actualCard || 0) + Number(actualUpi || 0)
       },
       variance: totalVariance,
-      varianceReason: varianceReason || 'Balanced settlement within threshold',
-      status: 'Audited & Submitted'
-    };
+      varianceReason
+    });
 
     setChecklists((prev) => [report, ...prev]);
     broadcastSyncEvent(SYNC_EVENTS.CHECKLIST_SUBMITTED, report);
@@ -514,9 +528,7 @@ export default function CounterView({
                 }
 
                 // PRD Section 16 Fallback reminder: Check if order sits unaccepted for > 2 mins
-                const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
-                const isUnacceptedOverdue = order.status === 'received' && elapsedMs > 2 * 60 * 1000;
-                const elapsedMins = Math.floor(elapsedMs / 60000);
+                const { elapsedMins, isUnacceptedOverdue } = checkUnacceptedOverdue(order);
 
                 return (
                   <div
@@ -1041,8 +1053,7 @@ export default function CounterView({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {offers.map((off) => {
-                  const today = new Date().toISOString().slice(0, 10);
-                  const isExpired = off.expiryDate && off.expiryDate < today;
+                  const isExpired = isOfferExpired(off);
                   return (
                     <div
                       key={off.id}

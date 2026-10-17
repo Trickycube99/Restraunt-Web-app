@@ -12,8 +12,6 @@ import {
   Receipt,
   DollarSign,
   Users,
-  Palette,
-  Monitor,
   Tag
 } from 'lucide-react';
 import { playTapSound } from '../utils/audio';
@@ -25,7 +23,7 @@ export default function BottomNav({
   cartCount,
   activeOrdersCount,
   language = 'en',
-  authSessions = {}
+  authSessions: _authSessions = {}
 }) {
   if (currentRole === 'developer') {
     return null;

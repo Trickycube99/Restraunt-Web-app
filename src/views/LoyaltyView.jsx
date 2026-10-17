@@ -1,21 +1,15 @@
 import React, { useState } from 'react';
 import {
-  Award,
   Crown,
   Gift,
   Search,
-  Sparkles,
   CheckCircle2,
   Phone,
-  User,
-  Clock,
-  ArrowRight,
-  Send,
   Ticket
 } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
-export default function LoyaltyView({ theme }) {
+export default function LoyaltyView({ theme: _theme }) {
   const [searchPhone, setSearchPhone] = useState('+91 98112-40192');
   const [selectedMember, setSelectedMember] = useState({
     id: 'MEM-8821',

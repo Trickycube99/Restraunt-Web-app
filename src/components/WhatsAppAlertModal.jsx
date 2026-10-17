@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { MessageSquare, X, Send, CheckCheck, Smartphone, Sparkles } from 'lucide-react';
+import { MessageSquare, X, CheckCheck } from 'lucide-react';
 import { playTapSound, playSuccessChime } from '../utils/audio';
 
 export default function WhatsAppAlertModal({ order, theme, chef, onClose }) {
   const [activeTab, setActiveTab] = useState('customer'); // 'customer' | 'owner'
-  const [customMsg, setCustomMsg] = useState('');
   const [messages, setMessages] = useState([
     {
       id: 1,

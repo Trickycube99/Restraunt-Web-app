@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  ShieldCheck,
   Lock,
   Layers,
   BarChart3,
@@ -9,9 +8,7 @@ import {
   User,
   AlertCircle,
   X,
-  ChevronRight,
-  MapPin,
-  Utensils
+  ChevronRight
 } from 'lucide-react';
 import { ROLE_CONFIGS, ROLES, authenticateRole } from '../utils/auth';
 import { playTapSound, playSuccessChime, playAlertChime } from '../utils/audio';
@@ -21,49 +18,27 @@ export default function AuthModal({
   targetRole = ROLES.COUNTER,
   activeSessionRole = null,
   onSuccess,
-  onClose,
-  theme
+  onClose
 }) {
-  const [currentStation, setCurrentStation] = useState(targetRole || ROLES.COUNTER);
-
-  useEffect(() => {
-    if (targetRole && targetRole !== ROLES.CUSTOMER) {
-      setCurrentStation(targetRole);
-    } else {
-      setCurrentStation(ROLES.COUNTER);
-    }
-  }, [targetRole]);
+  const [selectedStation, setSelectedStation] = useState(null);
+  const currentStation = selectedStation || (targetRole && targetRole !== ROLES.CUSTOMER ? targetRole : ROLES.COUNTER);
 
   const roleConfig = ROLE_CONFIGS[currentStation] || ROLE_CONFIGS[ROLES.COUNTER];
 
-  // Form states based on currentStation
-  const [formData, setFormData] = useState({});
+  // Discrete form state
+  const [pin, setPin] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize form data when currentStation changes
-  useEffect(() => {
-    if (!isOpen) return;
+  const resetForm = () => {
+    setPin('');
+    setEmail('');
+    setPassword('');
     setErrorMessage('');
-    if (currentStation === ROLES.DEVELOPER) {
-      setFormData({
-        email: '',
-        password: ''
-      });
-    } else if (currentStation === ROLES.ADMIN) {
-      setFormData({
-        name: '',
-        email: '',
-        pin: ''
-      });
-    } else {
-      // Default to Counter (only PIN required, zero name prompt)
-      setFormData({
-        terminal: 'POS-01 (Flagship CP)',
-        pin: ''
-      });
-    }
-  }, [currentStation, isOpen]);
+    setSelectedStation(null);
+  };
 
   if (!isOpen) return null;
 
@@ -87,13 +62,23 @@ export default function AuthModal({
     setIsSubmitting(true);
     setErrorMessage('');
 
+    let creds = {};
+    if (currentStation === ROLES.DEVELOPER) {
+      creds = { email, password };
+    } else if (currentStation === ROLES.ADMIN) {
+      creds = { email, pin };
+    } else {
+      creds = { terminal: 'POS-01 (Flagship CP)', pin };
+    }
+
     // Attempt authentication via abstraction layer
-    const result = authenticateRole(currentStation, formData);
+    const result = authenticateRole(currentStation, creds);
 
     if (result.success) {
       playSuccessChime();
       setTimeout(() => {
         setIsSubmitting(false);
+        resetForm();
         onSuccess(result.session, result.business);
       }, 200);
     } else {
@@ -116,8 +101,14 @@ export default function AuthModal({
     }
   };
 
+  const handleCloseModal = () => {
+    playTapSound();
+    resetForm();
+    onClose();
+  };
+
   return (
-    <div className="auth-modal-overlay" onClick={onClose}>
+    <div className="auth-modal-overlay" onClick={handleCloseModal}>
       <div
         className="auth-modal-card"
         onClick={(e) => e.stopPropagation()}
@@ -141,10 +132,7 @@ export default function AuthModal({
           </div>
           <button
             className="auth-modal-close-btn"
-            onClick={() => {
-              playTapSound();
-              onClose();
-            }}
+            onClick={handleCloseModal}
             aria-label="Close authentication modal"
           >
             <X size={18} />
@@ -169,7 +157,8 @@ export default function AuthModal({
               }}
               onClick={() => {
                 playTapSound();
-                setCurrentStation(st.id);
+                setSelectedStation(st.id);
+                setErrorMessage('');
               }}
             >
               <st.icon size={13} />
@@ -211,8 +200,8 @@ export default function AuthModal({
                 placeholder="Enter 4-Digit POS PIN"
                 className="auth-input"
                 maxLength={6}
-                value={formData.pin || ''}
-                onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
               />
               <span className="auth-hint">Enter your 4-digit counter terminal PIN to unlock the live POS.</span>
             </div>
@@ -231,8 +220,8 @@ export default function AuthModal({
                   required
                   placeholder="e.g. admin@advaitkitchen.com"
                   className="auth-input"
-                  value={formData.email || ''}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   autoFocus
                 />
               </div>
@@ -248,8 +237,8 @@ export default function AuthModal({
                   placeholder="Enter Master Owner PIN"
                   className="auth-input"
                   maxLength={8}
-                  value={formData.pin || ''}
-                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
                 />
                 <span className="auth-hint">Authenticates against your specific registered business account.</span>
               </div>
@@ -269,8 +258,8 @@ export default function AuthModal({
                   required
                   placeholder="dev@platform.com"
                   className="auth-input"
-                  value={formData.email || ''}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   autoFocus
                 />
               </div>
@@ -285,8 +274,8 @@ export default function AuthModal({
                   required
                   placeholder="Enter developer access key"
                   className="auth-input"
-                  value={formData.password || ''}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <span className="auth-hint">Full platform access to manage all tenant businesses.</span>
               </div>
